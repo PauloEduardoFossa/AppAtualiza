@@ -282,6 +282,7 @@ object frmMain: TfrmMain
       Style = csDropDownList
       TabOrder = 10
       OnChange = cbxVersaoScriptsChange
+      OnDropDown = cbxVersaoScriptsDropDown
     end
     object edtPastaScripts: TEdit
       Left = 20

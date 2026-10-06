@@ -96,10 +96,12 @@ type
     procedure miLimparLogClick(Sender: TObject);
     procedure cbxClienteBaseChange(Sender: TObject);
     procedure cbxVersaoScriptsChange(Sender: TObject);
+    procedure cbxVersaoScriptsDropDown(Sender: TObject);
     procedure cbxTemaChange(Sender: TObject);
   private
     FController: TMainController;
     FTopServers: TArray<TTopServerEntry>;
+    FRaizVersoes: string;
     procedure ConfigParaTela;
     procedure TelaParaConfig;
     procedure AtualizarCards;
@@ -119,9 +121,6 @@ var
 implementation
 
 {$R *.dfm}
-
-const
-  RAIZ_VERSOES_SCRIPTS = 'C:\TopSystem\Delphi\TopDados\Scripts\3.1\3.1.1';
 
 procedure TfrmMain.FormCreate(Sender: TObject);
 begin
@@ -241,27 +240,41 @@ end;
 procedure TfrmMain.CarregarVersoesScripts;
 var
   Pastas: TArray<string>;
-  Pasta: string;
+  Pasta, Atual, Selecionada: string;
 begin
+  Pasta := Trim(edtPastaScripts.Text);
+  Selecionada := '';
+  if cbxVersaoScripts.ItemIndex >= 0 then
+    Selecionada := cbxVersaoScripts.Items[cbxVersaoScripts.ItemIndex];
+
+  // Se o campo so aponta para a versao escolhida no combo, a raiz continua
+  // a mesma (senao listaria as subpastas da propria versao).
+  if not ((FRaizVersoes <> '') and (Selecionada <> '') and
+          SameText(ExcludeTrailingPathDelimiter(Pasta),
+                   TPath.Combine(FRaizVersoes, Selecionada))) then
+    FRaizVersoes := ExcludeTrailingPathDelimiter(Pasta);
+
   cbxVersaoScripts.Items.Clear;
-  if not TDirectory.Exists(RAIZ_VERSOES_SCRIPTS) then
+  if (FRaizVersoes <> '') and TDirectory.Exists(FRaizVersoes) then
   begin
-    cbxVersaoScripts.Enabled := False;
-    Exit;
+    Pastas := TDirectory.GetDirectories(FRaizVersoes);
+    TArray.Sort<string>(Pastas);
+    for Atual in Pastas do
+      cbxVersaoScripts.Items.Add(ExtractFileName(Atual));
   end;
-  Pastas := TDirectory.GetDirectories(RAIZ_VERSOES_SCRIPTS);
-  TArray.Sort<string>(Pastas);
-  for Pasta in Pastas do
-    cbxVersaoScripts.Items.Add(ExtractFileName(Pasta));
-  cbxVersaoScripts.Enabled := cbxVersaoScripts.Items.Count > 0;
-  cbxVersaoScripts.ItemIndex := -1;
+  cbxVersaoScripts.ItemIndex := cbxVersaoScripts.Items.IndexOf(Selecionada);
+end;
+
+procedure TfrmMain.cbxVersaoScriptsDropDown(Sender: TObject);
+begin
+  CarregarVersoesScripts;
 end;
 
 procedure TfrmMain.cbxVersaoScriptsChange(Sender: TObject);
 begin
   if cbxVersaoScripts.ItemIndex < 0 then
     Exit;
-  edtPastaScripts.Text := TPath.Combine(RAIZ_VERSOES_SCRIPTS,
+  edtPastaScripts.Text := TPath.Combine(FRaizVersoes,
     cbxVersaoScripts.Items[cbxVersaoScripts.ItemIndex]);
 end;
 
