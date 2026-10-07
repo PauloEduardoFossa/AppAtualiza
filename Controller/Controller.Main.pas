@@ -36,6 +36,7 @@ type
     procedure ExecutarPendentes(const AScripts: TArray<TMigrationScript> = nil);
     procedure PararExecucao;
     procedure RemoverScripts(const AScripts: TArray<TMigrationScript>);
+    function UltimoCodigoAplicado: string;
     function EstaExecutando: Boolean;
     function TemLogErros: Boolean;
     property Config: TAppConfig read FConfig;
@@ -206,6 +207,11 @@ begin
     Exit;
   for Script in AScripts do
     FScripts.Remove(Script);
+end;
+
+function TMainController.UltimoCodigoAplicado: string;
+begin
+  Result := FService.UltimoCodigoAplicado;
 end;
 
 function TMainController.EstaExecutando: Boolean;

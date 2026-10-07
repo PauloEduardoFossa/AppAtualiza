@@ -388,7 +388,7 @@ object frmMain: TfrmMain
       object pnlCardTotal: TPanel
         Left = 16
         Top = 12
-        Width = 150
+        Width = 120
         Height = 76
         BevelOuter = bvNone
         ParentBackground = False
@@ -415,9 +415,9 @@ object frmMain: TfrmMain
         end
       end
       object pnlCardPendentes: TPanel
-        Left = 182
+        Left = 148
         Top = 12
-        Width = 150
+        Width = 120
         Height = 76
         BevelOuter = bvNone
         ParentBackground = False
@@ -444,9 +444,9 @@ object frmMain: TfrmMain
         end
       end
       object pnlCardAplicados: TPanel
-        Left = 348
+        Left = 280
         Top = 12
-        Width = 150
+        Width = 120
         Height = 76
         BevelOuter = bvNone
         ParentBackground = False
@@ -473,9 +473,9 @@ object frmMain: TfrmMain
         end
       end
       object pnlCardErros: TPanel
-        Left = 514
+        Left = 412
         Top = 12
-        Width = 150
+        Width = 120
         Height = 76
         BevelOuter = bvNone
         ParentBackground = False
@@ -499,6 +499,35 @@ object frmMain: TfrmMain
           Width = 33
           Height = 15
           Caption = 'Erros'
+        end
+      end
+      object pnlCardUltimo: TPanel
+        Left = 544
+        Top = 12
+        Width = 120
+        Height = 76
+        BevelOuter = bvNone
+        ParentBackground = False
+        TabOrder = 4
+        object lblCardUltimoValor: TLabel
+          Left = 12
+          Top = 8
+          Width = 11
+          Height = 32
+          Caption = '-'
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -19
+          Font.Name = 'Segoe UI'
+          Font.Style = [fsBold]
+          ParentFont = False
+        end
+        object lblCardUltimoTitulo: TLabel
+          Left = 12
+          Top = 48
+          Width = 77
+          Height = 15
+          Caption = #218'ltimo script'
         end
       end
     end
@@ -583,6 +612,10 @@ object frmMain: TfrmMain
     object miExcluirScript: TMenuItem
       Caption = 'Excluir'
       OnClick = miExcluirScriptClick
+    end
+    object miDesmarcarTodos: TMenuItem
+      Caption = 'Desmarcar todos'
+      OnClick = miDesmarcarTodosClick
     end
   end
   object pmLog: TPopupMenu

@@ -65,9 +65,13 @@ type
     pnlCardErros: TPanel;
     lblCardErrosValor: TLabel;
     lblCardErrosTitulo: TLabel;
+    pnlCardUltimo: TPanel;
+    lblCardUltimoValor: TLabel;
+    lblCardUltimoTitulo: TLabel;
     lvScripts: TListView;
     pmScripts: TPopupMenu;
     miExcluirScript: TMenuItem;
+    miDesmarcarTodos: TMenuItem;
     pmLog: TPopupMenu;
     miLimparLog: TMenuItem;
     pnlLog: TPanel;
@@ -93,6 +97,7 @@ type
       Shift: TShiftState; X, Y: Integer);
     procedure pmScriptsPopup(Sender: TObject);
     procedure miExcluirScriptClick(Sender: TObject);
+    procedure miDesmarcarTodosClick(Sender: TObject);
     procedure miLimparLogClick(Sender: TObject);
     procedure cbxClienteBaseChange(Sender: TObject);
     procedure cbxVersaoScriptsChange(Sender: TObject);
@@ -450,6 +455,10 @@ begin
   try
     FController.AtualizarListaScripts;
     RecarregarGrid;
+    if FController.UltimoCodigoAplicado <> '' then
+      lblCardUltimoValor.Caption := FController.UltimoCodigoAplicado
+    else
+      lblCardUltimoValor.Caption := '-';
     AppendLog('Lista de scripts atualizada: ' + IntToStr(FController.Scripts.Count) +
       ' arquivo(s) encontrado(s).');
   except
@@ -529,6 +538,7 @@ end;
 
 procedure TfrmMain.pmScriptsPopup(Sender: TObject);
 begin
+  miDesmarcarTodos.Enabled := lvScripts.Items.Count > 0;
   miExcluirScript.Enabled := (lvScripts.Items.Count > 0) and not FController.EstaExecutando;
 end;
 
@@ -564,6 +574,19 @@ begin
   FController.RemoverScripts(Selecionados);
   RecarregarGrid;
   AppendLog(Format('%d script(s) removido(s) da lista.', [Qtde]));
+end;
+
+procedure TfrmMain.miDesmarcarTodosClick(Sender: TObject);
+var
+  I: Integer;
+begin
+  lvScripts.Items.BeginUpdate;
+  try
+    for I := 0 to lvScripts.Items.Count - 1 do
+      lvScripts.Items[I].Checked := False;
+  finally
+    lvScripts.Items.EndUpdate;
+  end;
 end;
 
 procedure TfrmMain.miLimparLogClick(Sender: TObject);

@@ -4,7 +4,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.RegularExpressions,
-  System.Generics.Collections, System.Generics.Defaults,
+  System.Generics.Collections, System.Generics.Defaults, System.Math,
   FireDAC.Comp.Client, FireDAC.Stan.Intf, FireDAC.Stan.Option,
   FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf,
   FireDAC.Comp.DataSet, FireDAC.DApt, FireDAC.Phys, FireDAC.Phys.FB,
@@ -25,10 +25,12 @@ type
     FOnScriptStatus: TScriptStatusEvent;
     FOnErroComando: TErroComandoEvent;
     FParando: Boolean;
+    FUltimoCodigoAplicado: string;
     procedure Log(const AMsg: string);
     procedure ErroComando(AScript: TMigrationScript; const ACmd, AMensagem: string);
     procedure AtualizarStatus(AScript: TMigrationScript);
     function CarregarCodigosAplicados: TArray<string>;
+    function CompararCodigos(const L, R: string): Integer;
     function CodigoJaAplicado(const ACodigo: string; const ACodigos: TArray<string>): Boolean;
     function DividirEmComandos(const ATexto: string): TArray<string>;
     function PosicaoTerminadorFora(const ABuffer, ATerminador: string): Integer;
@@ -46,6 +48,7 @@ type
     procedure ExecutarPendentes(AScripts: TMigrationScriptList; AStopOnError: Boolean;
       AApenasPendentes: Boolean = True);
     procedure Parar;
+    property UltimoCodigoAplicado: string read FUltimoCodigoAplicado;
     property OnLog: TLogEvent read FOnLog write FOnLog;
     property OnScriptStatus: TScriptStatusEvent read FOnScriptStatus write FOnScriptStatus;
     property OnErroComando: TErroComandoEvent read FOnErroComando write FOnErroComando;
@@ -138,6 +141,28 @@ begin
   end;
 end;
 
+function TMigrationService.CompararCodigos(const L, R: string): Integer;
+var
+  PL, PR: TArray<string>;
+  I, VL, VR: Integer;
+begin
+  // Compara a versao segmento a segmento (1.1.0.0.10 > 1.1.0.0.9).
+  PL := L.Split(['.']);
+  PR := R.Split(['.']);
+  for I := 0 to Max(Length(PL), Length(PR)) - 1 do
+  begin
+    VL := 0;
+    VR := 0;
+    if I < Length(PL) then
+      VL := StrToIntDef(Trim(PL[I]), 0);
+    if I < Length(PR) then
+      VR := StrToIntDef(Trim(PR[I]), 0);
+    if VL <> VR then
+      Exit(VL - VR);
+  end;
+  Result := 0;
+end;
+
 function TMigrationService.CodigoJaAplicado(const ACodigo: string; const ACodigos: TArray<string>): Boolean;
 var
   C: string;
@@ -170,8 +195,15 @@ begin
     end));
 
   Codigos := [];
+  FUltimoCodigoAplicado := '';
   if Conectado then
-    Codigos := CarregarCodigosAplicados
+  begin
+    Codigos := CarregarCodigosAplicados;
+    for Codigo in Codigos do
+      if (FUltimoCodigoAplicado = '') or
+         (CompararCodigos(Codigo, FUltimoCodigoAplicado) > 0) then
+        FUltimoCodigoAplicado := Codigo;
+  end
   else
     Log('Sem conexao ativa: nao foi possivel verificar scripts ja aplicados.');
 
@@ -377,10 +409,7 @@ begin
         FParando := True;
     end
     else
-    begin
       Script.Status := msSucesso;
-      Log(Script.Codigo + ' concluido com sucesso.');
-    end;
     AtualizarStatus(Script);
   end;
 end;
