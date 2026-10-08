@@ -12,6 +12,7 @@ object frmMain: TfrmMain
   Font.Name = 'Segoe UI'
   Font.Style = []
   Position = poScreenCenter
+  WindowState = wsMaximized
   KeyPreview = True
   OnCreate = FormCreate
   OnDestroy = FormDestroy
@@ -26,6 +27,7 @@ object frmMain: TfrmMain
     BevelOuter = bvNone
     ParentBackground = False
     TabOrder = 0
+    OnDblClick = btnMaximizarClick
     OnMouseDown = pnlHeaderMouseDown
     object lblTitulo: TLabel
       Left = 20
@@ -49,7 +51,7 @@ object frmMain: TfrmMain
         'Executor de Scripts de Atualiza'#231#227'o de Banco de Dados'
     end
     object lblTema: TLabel
-      Left = 946
+      Left = 906
       Top = 24
       Width = 32
       Height = 15
@@ -57,7 +59,7 @@ object frmMain: TfrmMain
       Caption = 'Tema:'
     end
     object cbxTema: TComboBox
-      Left = 986
+      Left = 946
       Top = 20
       Width = 130
       Height = 23
@@ -65,6 +67,16 @@ object frmMain: TfrmMain
       Style = csDropDownList
       TabOrder = 1
       OnChange = cbxTemaChange
+    end
+    object btnMaximizar: TButton
+      Left = 1092
+      Top = 16
+      Width = 32
+      Height = 32
+      Anchors = [akTop, akRight]
+      Caption = #9633
+      TabOrder = 2
+      OnClick = btnMaximizarClick
     end
     object btnFechar: TButton
       Left = 1132
@@ -602,6 +614,7 @@ object frmMain: TfrmMain
       RowSelect = True
       TabOrder = 3
       ViewStyle = vsReport
+      OnDblClick = lvScriptsDblClick
       OnMouseDown = lvScriptsMouseDown
     end
   end
@@ -612,6 +625,10 @@ object frmMain: TfrmMain
     object miExcluirScript: TMenuItem
       Caption = 'Excluir'
       OnClick = miExcluirScriptClick
+    end
+    object miAbrirDiretorio: TMenuItem
+      Caption = 'Abrir diret'#243'rio do script'
+      OnClick = miAbrirDiretorioClick
     end
     object miDesmarcarTodos: TMenuItem
       Caption = 'Desmarcar todos'

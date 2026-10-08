@@ -3,7 +3,7 @@ unit View.Main;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, Winapi.ShellAPI, System.SysUtils, System.Variants,
+  Winapi.Windows, Winapi.Messages, Winapi.ShellAPI, Winapi.MultiMon, System.SysUtils, System.Variants,
   System.Classes, System.IOUtils, System.Generics.Collections, Vcl.Graphics, Vcl.Controls,
   Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.FileCtrl, Vcl.Menus,
   Vcl.Themes, System.UITypes, Controller.Main, Model.MigrationScript, Model.Config,
@@ -16,6 +16,7 @@ type
     lblSubtitulo: TLabel;
     lblTema: TLabel;
     cbxTema: TComboBox;
+    btnMaximizar: TButton;
     btnFechar: TButton;
     pnlSidebar: TPanel;
     lblSecaoBanco: TLabel;
@@ -71,6 +72,7 @@ type
     lvScripts: TListView;
     pmScripts: TPopupMenu;
     miExcluirScript: TMenuItem;
+    miAbrirDiretorio: TMenuItem;
     miDesmarcarTodos: TMenuItem;
     pmLog: TPopupMenu;
     miLimparLog: TMenuItem;
@@ -91,10 +93,13 @@ type
     procedure btnExecutarClick(Sender: TObject);
     procedure btnPararClick(Sender: TObject);
     procedure btnFecharClick(Sender: TObject);
+    procedure btnMaximizarClick(Sender: TObject);
     procedure pnlHeaderMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure lvScriptsMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
+    procedure lvScriptsDblClick(Sender: TObject);
+    procedure miAbrirDiretorioClick(Sender: TObject);
     procedure pmScriptsPopup(Sender: TObject);
     procedure miExcluirScriptClick(Sender: TObject);
     procedure miDesmarcarTodosClick(Sender: TObject);
@@ -117,6 +122,7 @@ type
     function ItemDoScript(AScript: TMigrationScript): TListItem;
     procedure AppendLog(const AMsg: string);
     procedure HabilitarControles(AHabilitado: Boolean);
+    procedure WMGetMinMaxInfo(var Msg: TWMGetMinMaxInfo); message WM_GETMINMAXINFO;
   public
   end;
 
@@ -126,6 +132,27 @@ var
 implementation
 
 {$R *.dfm}
+
+procedure TfrmMain.WMGetMinMaxInfo(var Msg: TWMGetMinMaxInfo);
+var
+  hMon: HMONITOR;
+  Info: TMonitorInfo;
+begin
+  inherited;
+  // Sem borda, o Windows maximiza sobre o monitor inteiro; limita a area de trabalho
+  // (respeita a barra de tarefas) do monitor onde a janela esta. Consulta a API a cada
+  // chamada (nao o Screen.Monitors do VCL, que pode ficar defasado ao trocar de monitor).
+  if not HandleAllocated then
+    Exit;
+  hMon := MonitorFromWindow(Handle, MONITOR_DEFAULTTONEAREST);
+  Info.cbSize := SizeOf(Info);
+  if not GetMonitorInfo(hMon, @Info) then
+    Exit;
+  Msg.MinMaxInfo^.ptMaxPosition.X := Info.rcWork.Left - Info.rcMonitor.Left;
+  Msg.MinMaxInfo^.ptMaxPosition.Y := Info.rcWork.Top - Info.rcMonitor.Top;
+  Msg.MinMaxInfo^.ptMaxSize.X := Info.rcWork.Right - Info.rcWork.Left;
+  Msg.MinMaxInfo^.ptMaxSize.Y := Info.rcWork.Bottom - Info.rcWork.Top;
+end;
 
 procedure TfrmMain.FormCreate(Sender: TObject);
 begin
@@ -510,6 +537,14 @@ begin
   Close;
 end;
 
+procedure TfrmMain.btnMaximizarClick(Sender: TObject);
+begin
+  if WindowState = wsMaximized then
+    WindowState := wsNormal
+  else
+    WindowState := wsMaximized;
+end;
+
 procedure TfrmMain.pnlHeaderMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 begin
@@ -536,8 +571,31 @@ begin
   end;
 end;
 
+procedure TfrmMain.lvScriptsDblClick(Sender: TObject);
+var
+  Pt: TPoint;
+  Item: TListItem;
+begin
+  Pt := lvScripts.ScreenToClient(Mouse.CursorPos);
+  Item := lvScripts.GetItemAt(Pt.X, Pt.Y);
+  if Item = nil then
+    Exit;
+  ShellExecute(0, 'open', PChar(TMigrationScript(Item.Data).Arquivo), nil, nil, SW_SHOWNORMAL);
+end;
+
+procedure TfrmMain.miAbrirDiretorioClick(Sender: TObject);
+var
+  Arquivo: string;
+begin
+  if lvScripts.Selected = nil then
+    Exit;
+  Arquivo := TMigrationScript(lvScripts.Selected.Data).Arquivo;
+  ShellExecute(0, 'open', 'explorer.exe', PChar('/select,"' + Arquivo + '"'), nil, SW_SHOWNORMAL);
+end;
+
 procedure TfrmMain.pmScriptsPopup(Sender: TObject);
 begin
+  miAbrirDiretorio.Enabled := lvScripts.Selected <> nil;
   miDesmarcarTodos.Enabled := lvScripts.Items.Count > 0;
   miExcluirScript.Enabled := (lvScripts.Items.Count > 0) and not FController.EstaExecutando;
 end;
