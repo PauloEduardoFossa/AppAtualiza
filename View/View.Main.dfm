@@ -369,23 +369,47 @@ object frmMain: TfrmMain
         OnClick = btnAtualizarListaClick
       end
       object btnExecutar: TButton
-        Left = 184
+        Left = 276
         Top = 12
         Width = 160
         Height = 32
         Caption = 'Executar Pendentes'
-        TabOrder = 1
+        TabOrder = 3
         OnClick = btnExecutarClick
       end
       object btnParar: TButton
-        Left = 352
+        Left = 444
         Top = 12
         Width = 100
         Height = 32
         Caption = 'Parar'
         Enabled = False
-        TabOrder = 2
+        TabOrder = 4
         OnClick = btnPararClick
+      end
+      object btnVersaoAnterior: TButton
+        Left = 184
+        Top = 12
+        Width = 40
+        Height = 32
+        Hint = 'Selecionar a vers'#227'o anterior dos scripts'
+        Caption = '<'
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 1
+        OnClick = btnVersaoAnteriorClick
+      end
+      object btnProximaVersao: TButton
+        Left = 228
+        Top = 12
+        Width = 40
+        Height = 32
+        Hint = 'Selecionar a pr'#243'xima vers'#227'o dos scripts'
+        Caption = '>'
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 2
+        OnClick = btnProximaVersaoClick
       end
     end
     object pnlCards: TPanel

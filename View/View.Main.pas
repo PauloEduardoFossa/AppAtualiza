@@ -53,6 +53,8 @@ type
     btnAtualizarLista: TButton;
     btnExecutar: TButton;
     btnParar: TButton;
+    btnProximaVersao: TButton;
+    btnVersaoAnterior: TButton;
     pnlCards: TPanel;
     pnlCardTotal: TPanel;
     lblCardTotalValor: TLabel;
@@ -92,6 +94,9 @@ type
     procedure btnAtualizarListaClick(Sender: TObject);
     procedure btnExecutarClick(Sender: TObject);
     procedure btnPararClick(Sender: TObject);
+    procedure btnProximaVersaoClick(Sender: TObject);
+    procedure btnVersaoAnteriorClick(Sender: TObject);
+    procedure SelecionarVersao(ADelta: Integer);
     procedure btnFecharClick(Sender: TObject);
     procedure btnMaximizarClick(Sender: TObject);
     procedure pnlHeaderMouseDown(Sender: TObject; Button: TMouseButton;
@@ -471,6 +476,8 @@ procedure TfrmMain.HabilitarControles(AHabilitado: Boolean);
 begin
   btnAtualizarLista.Enabled := AHabilitado;
   btnExecutar.Enabled := AHabilitado;
+  btnProximaVersao.Enabled := AHabilitado;
+  btnVersaoAnterior.Enabled := AHabilitado;
   btnTestarConexao.Enabled := AHabilitado;
   btnSalvarConfig.Enabled := AHabilitado;
   btnParar.Enabled := not AHabilitado;
@@ -530,6 +537,43 @@ procedure TfrmMain.btnPararClick(Sender: TObject);
 begin
   FController.PararExecucao;
   AppendLog('Solicitada parada ap'#243's o script atual...');
+end;
+
+procedure TfrmMain.btnProximaVersaoClick(Sender: TObject);
+begin
+  SelecionarVersao(1);
+end;
+
+procedure TfrmMain.btnVersaoAnteriorClick(Sender: TObject);
+begin
+  SelecionarVersao(-1);
+end;
+
+procedure TfrmMain.SelecionarVersao(ADelta: Integer);
+var
+  Idx: Integer;
+begin
+  if cbxVersaoScripts.ItemIndex < 0 then
+  begin
+    MessageDlg('Informe uma Vers'#227'o dos Scripts', mtInformation, [mbOK], 0);
+    cbxVersaoScripts.SetFocus;
+    Exit;
+  end;
+
+  CarregarVersoesScripts;
+  Idx := cbxVersaoScripts.ItemIndex;
+  if (Idx < 0) or (Idx + ADelta < 0) or
+     (Idx + ADelta > cbxVersaoScripts.Items.Count - 1) then
+  begin
+    if ADelta > 0 then
+      MessageDlg('N'#227'o existe pr'#243'xima vers'#227'o de scripts', mtInformation, [mbOK], 0)
+    else
+      MessageDlg('N'#227'o existe vers'#227'o anterior de scripts', mtInformation, [mbOK], 0);
+    Exit;
+  end;
+
+  cbxVersaoScripts.ItemIndex := Idx + ADelta;
+  cbxVersaoScriptsChange(cbxVersaoScripts);
 end;
 
 procedure TfrmMain.btnFecharClick(Sender: TObject);
