@@ -80,6 +80,12 @@ Fica ao lado do exe (`Model.Config.DefaultConfigFileName`). Formato:
   FireDAC.VCLUI.Wait` no `.dpr` (so precisa estar linkado, nao precisa
   instanciar nada).
 
+- **Maximizar em monitor com escala diferente cobre a barra de tarefas /
+  botoes da direita somem**: o exe era DPI-unaware (sem manifesto), entao
+  `rcWork`/`ptMaxSize` do `WMGetMinMaxInfo` nao batiam com os pixels reais.
+  Fix: `AppAtualiza.manifest` (PerMonitorV2) embutido via `1 24
+  "AppAtualiza.manifest"` no `AppAtualiza.rc` (regenerar o `.RES` com `cgrc`).
+
 ## Icone do executavel
 
 `Assets\AppAtualiza.ico` (multi-resolucao 16..256, frames PNG) foi gerado por
