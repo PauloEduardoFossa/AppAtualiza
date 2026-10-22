@@ -20,8 +20,11 @@ type
   private
     FDB: TDBConfig;
     FScriptsFolder: string;
+    FScriptsRoot: string;
+    FScriptsVersion: string;
     FStopOnError: Boolean;
     FThemeName: string;
+    FClientName: string;
     class function Ofuscar(const S: string): string; static;
     class function Desofuscar(const S: string): string; static;
   public
@@ -30,8 +33,11 @@ type
     procedure SaveToFile(const AFileName: string);
     property DB: TDBConfig read FDB write FDB;
     property ScriptsFolder: string read FScriptsFolder write FScriptsFolder;
+    property ScriptsRoot: string read FScriptsRoot write FScriptsRoot;
+    property ScriptsVersion: string read FScriptsVersion write FScriptsVersion;
     property StopOnError: Boolean read FStopOnError write FStopOnError;
     property ThemeName: string read FThemeName write FThemeName;
+    property ClientName: string read FClientName write FClientName;
   end;
 
 function DefaultConfigFileName: string;
@@ -85,8 +91,11 @@ begin
   FDB.DatabasePath := '';
   FDB.FbClientPath := '';
   FScriptsFolder := '';
+  FScriptsRoot := '';
+  FScriptsVersion := '';
   FStopOnError := True;
   FThemeName := '';
+  FClientName := '';
 end;
 
 procedure TAppConfig.LoadFromFile(const AFileName: string);
@@ -112,9 +121,15 @@ begin
       FDB.CharacterSet := JDB.GetValue<string>('characterSet', FDB.CharacterSet);
       FDB.FbClientPath := JDB.GetValue<string>('fbClientPath', '');
     end;
-    FScriptsFolder := Raiz.GetValue<string>('scriptsFolder', FScriptsFolder);
+    FScriptsRoot := Raiz.GetValue<string>('scriptsFolder', FScriptsRoot);
+    FScriptsVersion := Raiz.GetValue<string>('scriptsVersion', FScriptsVersion);
+    if FScriptsVersion <> '' then
+      FScriptsFolder := TPath.Combine(FScriptsRoot, FScriptsVersion)
+    else
+      FScriptsFolder := FScriptsRoot;
     FStopOnError := Raiz.GetValue<Boolean>('stopOnError', FStopOnError);
     FThemeName := Raiz.GetValue<string>('themeName', FThemeName);
+    FClientName := Raiz.GetValue<string>('clientName', FClientName);
   finally
     Raiz.Free;
   end;
@@ -135,9 +150,11 @@ begin
     JDB.AddPair('characterSet', FDB.CharacterSet);
     JDB.AddPair('fbClientPath', FDB.FbClientPath);
     Raiz.AddPair('database', JDB);
-    Raiz.AddPair('scriptsFolder', FScriptsFolder);
+    Raiz.AddPair('scriptsFolder', FScriptsRoot);
+    Raiz.AddPair('scriptsVersion', FScriptsVersion);
     Raiz.AddPair('stopOnError', TJSONBool.Create(FStopOnError));
     Raiz.AddPair('themeName', FThemeName);
+    Raiz.AddPair('clientName', FClientName);
     TFile.WriteAllText(AFileName, Raiz.ToJSON, TEncoding.UTF8);
   finally
     Raiz.Free;

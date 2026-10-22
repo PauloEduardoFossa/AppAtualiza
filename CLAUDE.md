@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 Guidance for Claude Code when working in this repository.
 
@@ -14,15 +14,18 @@ working copy SVN; nao faz parte do monorepo TopSystem em `C:\TopSystem\Delphi`
 ## Build
 
 ```
-cmd /c "call ""C:\Program Files (x86)\Embarcadero\Studio\20.0\bin\rsvars.bat"" && dcc32 AppAtualiza.dpr -B"
+.\build.bat
 ```
+
+Saida: `bin\AppAtualiza.exe` (junto de `config.json`, `logs\` e `Styles\`); `.dcu` em `dcu\`. Fontes de recurso (`.rc`, `.manifest`, `.RES`, `.ico`) em `Assets\`.
 
 Sem `.dproj` — compila direto com `dcc32` porque o `dcc32.cfg` da instalacao ja
 inclui `C:\...\Studio\20.0\lib\win32\release` no `-u`, onde estao os `.dcu` de
 RTL/VCL/FireDAC. Nao precisa de `-U` extra.
 
-O `.res` com o icone (`AppAtualiza.RES`) precisa existir **antes** de compilar
-(veja "Icone do executavel" abaixo) — o `.dpr` tem `{$R AppAtualiza.res}`.
+O `.res` com o icone (`Assets\AppAtualiza.RES`) precisa existir **antes** de compilar
+(veja "Icone do executavel" abaixo) — o `.dpr` tem `{$R Assets\AppAtualiza.res}`.
+Rodar `cgrc` de dentro de `Assets\`.
 
 ## Arquitetura (MVC)
 
@@ -111,3 +114,4 @@ script PowerShell ad-hoc (nao versionado no projeto) usando GDI+
   ```
   (gera `AppAtualiza.RES` automaticamente; sem `/fo`/`/r` — esses switches
   nessa versao dao "Invalid number of arguments").
+

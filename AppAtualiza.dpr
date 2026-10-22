@@ -14,7 +14,7 @@ uses
   Model.MigrationService in 'Model\Model.MigrationService.pas',
   Model.TopServersImport in 'Model\Model.TopServersImport.pas';
 
-{$R AppAtualiza.res}
+{$R Assets\AppAtualiza.res}
 
 function EstiloJaExistia(const ANome: string; const ANomes: TArray<string>): Boolean;
 var

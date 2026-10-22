@@ -149,8 +149,10 @@ begin
   end;
 
   FExecutando := True;
-  FArquivoLogErros := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)),
-    'erros_' + FormatDateTime('yyyymmdd_hhnnss', Now) + '.log');
+  FArquivoLogErros := TPath.Combine(
+    TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'logs'),
+    'erros_' +FormatDateTime('yyyymmdd_hhnnss', Now) + '.log');
+  ForceDirectories(ExtractFilePath(FArquivoLogErros));
   TThread.CreateAnonymousThread(
     procedure
     var

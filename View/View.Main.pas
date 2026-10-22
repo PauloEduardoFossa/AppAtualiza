@@ -110,6 +110,7 @@ type
     procedure miDesmarcarTodosClick(Sender: TObject);
     procedure miLimparLogClick(Sender: TObject);
     procedure cbxClienteBaseChange(Sender: TObject);
+    procedure PreencherVersoes(const ASelecionada: string);
     procedure cbxVersaoScriptsChange(Sender: TObject);
     procedure cbxVersaoScriptsDropDown(Sender: TObject);
     procedure cbxTemaChange(Sender: TObject);
@@ -162,6 +163,7 @@ end;
 procedure TfrmMain.FormCreate(Sender: TObject);
 begin
   FController := TMainController.Create;
+  lvScripts.HideSelection := False;
   FController.OnLog := AppendLog;
   FController.OnScriptStatus :=
     procedure(AScript: TMigrationScript)
@@ -170,7 +172,14 @@ begin
     begin
       Item := ItemDoScript(AScript);
       if Item <> nil then
+      begin
         Item.SubItems[1] := StatusDescricao(AScript.Status);
+        if AScript.Status = msExecutando then
+        begin
+          lvScripts.Selected := Item;
+          Item.MakeVisible(False);
+        end;
+      end;
       AtualizarCards;
     end;
   FController.OnFimExecucao :=
@@ -224,6 +233,8 @@ begin
     cbxCharset.ItemIndex := 0;
   edtFbClient.Text := FController.Config.DB.FbClientPath;
   edtPastaScripts.Text := FController.Config.ScriptsFolder;
+  FRaizVersoes := ExcludeTrailingPathDelimiter(FController.Config.ScriptsRoot);
+  PreencherVersoes(FController.Config.ScriptsVersion);
   chkPararErro.Checked := FController.Config.StopOnError;
 end;
 
@@ -244,9 +255,25 @@ begin
   DB.FbClientPath := Trim(edtFbClient.Text);
   FController.Config.DB := DB;
   FController.Config.ScriptsFolder := Trim(edtPastaScripts.Text);
+  if (FRaizVersoes <> '') and (cbxVersaoScripts.ItemIndex >= 0) and
+     SameText(ExcludeTrailingPathDelimiter(Trim(edtPastaScripts.Text)),
+              TPath.Combine(FRaizVersoes, cbxVersaoScripts.Items[cbxVersaoScripts.ItemIndex])) then
+  begin
+    FController.Config.ScriptsRoot := FRaizVersoes;
+    FController.Config.ScriptsVersion := cbxVersaoScripts.Items[cbxVersaoScripts.ItemIndex];
+  end
+  else
+  begin
+    FController.Config.ScriptsRoot := Trim(edtPastaScripts.Text);
+    FController.Config.ScriptsVersion := '';
+  end;
   FController.Config.StopOnError := chkPararErro.Checked;
   if cbxTema.ItemIndex >= 0 then
     FController.Config.ThemeName := cbxTema.Items[cbxTema.ItemIndex];
+  if cbxClienteBase.ItemIndex >= 0 then
+    FController.Config.ClientName := cbxClienteBase.Items[cbxClienteBase.ItemIndex]
+  else
+    FController.Config.ClientName := '';
 end;
 
 procedure TfrmMain.CarregarClientesBase;
@@ -258,7 +285,7 @@ begin
   for Entry in FTopServers do
     cbxClienteBase.Items.Add(Entry.NomeExibicao);
   cbxClienteBase.Enabled := cbxClienteBase.Items.Count > 0;
-  cbxClienteBase.ItemIndex := -1;
+  cbxClienteBase.ItemIndex := cbxClienteBase.Items.IndexOf(FController.Config.ClientName);
 end;
 
 procedure TfrmMain.cbxClienteBaseChange(Sender: TObject);
@@ -276,8 +303,7 @@ end;
 
 procedure TfrmMain.CarregarVersoesScripts;
 var
-  Pastas: TArray<string>;
-  Pasta, Atual, Selecionada: string;
+  Pasta, Selecionada: string;
 begin
   Pasta := Trim(edtPastaScripts.Text);
   Selecionada := '';
@@ -290,7 +316,14 @@ begin
           SameText(ExcludeTrailingPathDelimiter(Pasta),
                    TPath.Combine(FRaizVersoes, Selecionada))) then
     FRaizVersoes := ExcludeTrailingPathDelimiter(Pasta);
+  PreencherVersoes(Selecionada);
+end;
 
+procedure TfrmMain.PreencherVersoes(const ASelecionada: string);
+var
+  Pastas: TArray<string>;
+  Atual: string;
+begin
   cbxVersaoScripts.Items.Clear;
   if (FRaizVersoes <> '') and TDirectory.Exists(FRaizVersoes) then
   begin
@@ -299,7 +332,7 @@ begin
     for Atual in Pastas do
       cbxVersaoScripts.Items.Add(ExtractFileName(Atual));
   end;
-  cbxVersaoScripts.ItemIndex := cbxVersaoScripts.Items.IndexOf(Selecionada);
+  cbxVersaoScripts.ItemIndex := cbxVersaoScripts.Items.IndexOf(ASelecionada);
 end;
 
 procedure TfrmMain.cbxVersaoScriptsDropDown(Sender: TObject);
