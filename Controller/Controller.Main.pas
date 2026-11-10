@@ -35,6 +35,9 @@ type
     procedure AtualizarListaScripts;
     procedure ExecutarPendentes(const AScripts: TArray<TMigrationScript> = nil);
     procedure PararExecucao;
+    procedure EstornarScripts(const AScripts: TArray<TMigrationScript>);
+    function PodeEstornar(AScript: TMigrationScript): Boolean;
+    function ResumoEstorno(const AScripts: TArray<TMigrationScript>): TResumoEstorno;
     procedure RemoverScripts(const AScripts: TArray<TMigrationScript>);
     function UltimoCodigoAplicado: string;
     function EstaExecutando: Boolean;
@@ -194,6 +197,69 @@ end;
 procedure TMainController.PararExecucao;
 begin
   FService.Parar;
+end;
+
+function TMainController.PodeEstornar(AScript: TMigrationScript): Boolean;
+begin
+  Result := (not FExecutando) and (AScript <> nil) and FService.PodeEstornar(AScript.Codigo);
+end;
+
+function TMainController.ResumoEstorno(const AScripts: TArray<TMigrationScript>): TResumoEstorno;
+var
+  Script: TMigrationScript;
+  R: TResumoEstorno;
+begin
+  Result.Reversiveis := 0;
+  Result.Avisos := [];
+  for Script in AScripts do
+  begin
+    R := FService.ResumoEstorno(Script.Codigo);
+    Inc(Result.Reversiveis, R.Reversiveis);
+    Result.Avisos := Result.Avisos + R.Avisos;
+  end;
+end;
+
+procedure TMainController.EstornarScripts(const AScripts: TArray<TMigrationScript>);
+begin
+  if FExecutando or (Length(AScripts) = 0) then
+    Exit;
+
+  FExecutando := True;
+  FArquivoLogErros := TPath.Combine(
+    TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'logs'),
+    'erros_' + FormatDateTime('yyyymmdd_hhnnss', Now) + '.log');
+  ForceDirectories(ExtractFilePath(FArquivoLogErros));
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      Lista: TMigrationScriptList;
+      Item: TMigrationScript;
+    begin
+      try
+        try
+          EnsureConectado;
+          Lista := TMigrationScriptList.Create(False);
+          try
+            for Item in AScripts do
+              Lista.Add(Item);
+            FService.EstornarScripts(Lista);
+          finally
+            Lista.Free;
+          end;
+        except
+          on E: Exception do
+            HandleLog(Self, 'ERRO: ' + E.Message);
+        end;
+      finally
+        FExecutando := False;
+        TThread.Queue(nil,
+          procedure
+          begin
+            if Assigned(FOnFimExecucao) then
+              FOnFimExecucao;
+          end);
+      end;
+    end).Start;
 end;
 
 procedure TMainController.RemoverScripts(const AScripts: TArray<TMigrationScript>);

@@ -650,6 +650,14 @@ object frmMain: TfrmMain
       Caption = 'Excluir'
       OnClick = miExcluirScriptClick
     end
+    object miExecutarScript: TMenuItem
+      Caption = 'Executar somente este script'
+      OnClick = miExecutarScriptClick
+    end
+    object miEstornarScript: TMenuItem
+      Caption = 'Estornar'
+      OnClick = miEstornarScriptClick
+    end
     object miAbrirDiretorio: TMenuItem
       Caption = 'Abrir diret'#243'rio do script'
       OnClick = miAbrirDiretorioClick

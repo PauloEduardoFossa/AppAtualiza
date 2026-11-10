@@ -10,9 +10,14 @@ uses
   FireDAC.Comp.DataSet, FireDAC.DApt, FireDAC.Phys, FireDAC.Phys.FB,
   FireDAC.Phys.FBDef, FireDAC.Stan.Async, FireDAC.Stan.Param,
   FireDAC.Stan.Def, FireDAC.Stan.Pool,
-  Model.Config, Model.MigrationScript;
+  Model.Config, Model.MigrationScript, Model.UndoBuilder, Model.UndoStore;
 
 type
+  TResumoEstorno = record
+    Reversiveis: Integer;
+    Avisos: TArray<string>;
+  end;
+
   TLogEvent = procedure(Sender: TObject; const AMensagem: string) of object;
   TScriptStatusEvent = procedure(Sender: TObject; AScript: TMigrationScript) of object;
   TErroComandoEvent = procedure(Sender: TObject; AScript: TMigrationScript;
@@ -26,6 +31,7 @@ type
     FOnErroComando: TErroComandoEvent;
     FParando: Boolean;
     FUltimoCodigoAplicado: string;
+    FUndoStore: TUndoStore;
     procedure Log(const AMsg: string);
     procedure ErroComando(AScript: TMigrationScript; const ACmd, AMensagem: string);
     procedure AtualizarStatus(AScript: TMigrationScript);
@@ -48,6 +54,9 @@ type
     procedure ExecutarPendentes(AScripts: TMigrationScriptList; AStopOnError: Boolean;
       AApenasPendentes: Boolean = True);
     procedure Parar;
+    function PodeEstornar(const ACodigo: string): Boolean;
+    function ResumoEstorno(const ACodigo: string): TResumoEstorno;
+    procedure EstornarScripts(AScripts: TMigrationScriptList);
     property UltimoCodigoAplicado: string read FUltimoCodigoAplicado;
     property OnLog: TLogEvent read FOnLog write FOnLog;
     property OnScriptStatus: TScriptStatusEvent read FOnScriptStatus write FOnScriptStatus;
@@ -63,10 +72,12 @@ begin
   inherited Create;
   FConnection := TFDConnection.Create(nil);
   FConnection.LoginPrompt := False;
+  FUndoStore := TUndoStore.Create;
 end;
 
 destructor TMigrationService.Destroy;
 begin
+  FUndoStore.Free;
   FConnection.Free;
   inherited;
 end;
@@ -105,6 +116,8 @@ begin
   if ADB.FbClientPath <> '' then
     FConnection.Params.Values['VendorLib'] := ADB.FbClientPath;
   FConnection.Connected := True;
+  // Historico de estorno e por base (servidor + caminho do .fdb).
+  FUndoStore.DefinirBase(ADB.Server + '|' + ADB.DatabasePath);
 end;
 
 procedure TMigrationService.Desconectar;
@@ -359,6 +372,11 @@ var
   Cmd: string;
   Erro: Boolean;
   JaAplicadoAntes: Boolean;
+  Builder: TUndoBuilder;
+  Registro: TUndoRegistro;
+  Existente: TUndoRegistro;
+  Info: TUndoComando;
+  Gravar: Boolean;
 begin
   FParando := False;
   for Script in AScripts do
@@ -378,28 +396,59 @@ begin
     Script.MensagemErro := '';
     JaAplicadoAntes := ScriptJaAplicado(Script.Codigo);
 
-    for Cmd in Comandos do
-    begin
-      if DeveIgnorarComando(Cmd) then
-        Continue;
-      if JaAplicadoAntes and EhInsertNaTabelaScript(Cmd) then
+    // So guarda historico de estorno para scripts aplicados pelo app: ou o
+    // script ainda nao estava na base, ou ja tinha historico (reexecucao).
+    Gravar := (not JaAplicadoAntes) or FUndoStore.Existe(Script.Codigo);
+    Registro.Codigo := Script.Codigo;
+    Registro.AplicadoEm := FormatDateTime('yyyy-mm-dd hh:nn:ss', Now);
+    Registro.Comandos := [];
+
+    Builder := TUndoBuilder.Create(FConnection);
+    try
+      for Cmd in Comandos do
       begin
-        Log('  (ja registrado, ignorando INSERT) ' + Script.Codigo);
-        Continue;
-      end;
-      try
-        FConnection.ExecSQL(Cmd);
-      except
-        on E: Exception do
+        if DeveIgnorarComando(Cmd) then
+          Continue;
+        if JaAplicadoAntes and EhInsertNaTabelaScript(Cmd) then
         begin
-          Erro := True;
-          if Script.MensagemErro <> '' then
-            Script.MensagemErro := Script.MensagemErro + sLineBreak;
-          Script.MensagemErro := Script.MensagemErro + E.Message;
-          ErroComando(Script, Cmd, E.Message);
+          Log('  (ja registrado, ignorando INSERT) ' + Script.Codigo);
+          Continue;
+        end;
+        if Gravar then
+          Info := Builder.Preparar(Cmd);
+        try
+          FConnection.ExecSQL(Cmd);
+          if Gravar then
+            Registro.Comandos := Registro.Comandos + [Info];
+        except
+          on E: Exception do
+          begin
+            Erro := True;
+            if Script.MensagemErro <> '' then
+              Script.MensagemErro := Script.MensagemErro + sLineBreak;
+            Script.MensagemErro := Script.MensagemErro + E.Message;
+            ErroComando(Script, Cmd, E.Message);
+          end;
         end;
       end;
+    finally
+      Builder.Free;
     end;
+
+    if Gravar and (Length(Registro.Comandos) > 0) then
+      try
+        // Reexecucao: os novos undos vem depois dos antigos (estorno e em ordem inversa).
+        if FUndoStore.Carregar(Script.Codigo, Existente) then
+        begin
+          Existente.Comandos := Existente.Comandos + Registro.Comandos;
+          Registro := Existente;
+        end;
+        FUndoStore.Salvar(Registro);
+      except
+        on E: Exception do
+          Log('AVISO: nao foi possivel gravar o historico de estorno de ' +
+            Script.Codigo + ': ' + E.Message);
+      end;
 
     if Erro then
     begin
@@ -417,6 +466,134 @@ end;
 procedure TMigrationService.Parar;
 begin
   FParando := True;
+end;
+
+function TMigrationService.PodeEstornar(const ACodigo: string): Boolean;
+begin
+  Result := FUndoStore.Existe(ACodigo);
+end;
+
+function TMigrationService.ResumoEstorno(const ACodigo: string): TResumoEstorno;
+var
+  Reg: TUndoRegistro;
+  C: TUndoComando;
+begin
+  Result.Reversiveis := 0;
+  Result.Avisos := [];
+  if not FUndoStore.Carregar(ACodigo, Reg) then
+    Exit;
+  for C in Reg.Comandos do
+    if C.Reversivel then
+      Inc(Result.Reversiveis, Length(C.Undo))
+    else
+      Result.Avisos := Result.Avisos + [ACodigo + ': ' + C.Aviso];
+end;
+
+procedure TMigrationService.EstornarScripts(AScripts: TMigrationScriptList);
+var
+  Ordenados: TArray<TMigrationScript>;
+  Script: TMigrationScript;
+  Reg: TUndoRegistro;
+  Restantes: TArray<TUndoComando>;
+  C: TUndoComando;
+  I, J: Integer;
+  Falhou, CmdFalhou: Boolean;
+  Sql: string;
+begin
+  FParando := False;
+  Ordenados := AScripts.ToArray;
+  // Do mais novo para o mais antigo: um script posterior pode depender do anterior.
+  TArray.Sort<TMigrationScript>(Ordenados, TComparer<TMigrationScript>.Construct(
+    function(const L, R: TMigrationScript): Integer
+    begin
+      Result := CompararCodigos(R.Codigo, L.Codigo);
+    end));
+
+  for Script in Ordenados do
+  begin
+    if FParando then
+      Break;
+
+    Script.Status := msExecutando;
+    Script.MensagemErro := '';
+    AtualizarStatus(Script);
+    Log('Estornando ' + Script.Codigo + '...');
+
+    if not FUndoStore.Carregar(Script.Codigo, Reg) then
+    begin
+      Script.Status := msErro;
+      Script.MensagemErro := 'Sem historico de estorno para este script nesta base.';
+      Log('Erro ao estornar ' + Script.Codigo + ': ' + Script.MensagemErro);
+      AtualizarStatus(Script);
+      Continue;
+    end;
+
+    Falhou := False;
+    Restantes := [];
+    for I := High(Reg.Comandos) downto 0 do
+    begin
+      C := Reg.Comandos[I];
+      if not C.Reversivel then
+      begin
+        Log('  AVISO (nao revertido): ' + C.Aviso);
+        Continue;
+      end;
+      CmdFalhou := False;
+      for J := 0 to High(C.Undo) do
+      begin
+        Sql := C.Undo[J];
+        try
+          FConnection.ExecSQL(Sql);
+        except
+          on E: Exception do
+          begin
+            CmdFalhou := True;
+            if Script.MensagemErro <> '' then
+              Script.MensagemErro := Script.MensagemErro + sLineBreak;
+            Script.MensagemErro := Script.MensagemErro + E.Message;
+            ErroComando(Script, Sql, E.Message);
+          end;
+        end;
+      end;
+      // Quem falhou continua no historico para nova tentativa.
+      if CmdFalhou then
+      begin
+        Falhou := True;
+        Restantes := [C] + Restantes;
+      end;
+    end;
+
+    if Falhou then
+    begin
+      Reg.Comandos := Restantes;
+      try
+        FUndoStore.Salvar(Reg);
+      except
+        // sem acao: o historico antigo permanece
+      end;
+      Script.Status := msErro;
+      Log('Erro ao estornar script ' + Script.Codigo);
+      if FParando = False then
+        FParando := True; // dependencias: nao seguir para scripts mais antigos
+    end
+    else
+    begin
+      try
+        FConnection.ExecSQL('DELETE FROM SCRIPT WHERE CODIGO = :c', [Script.Codigo]);
+        FUndoStore.Apagar(Script.Codigo);
+        Script.Status := msPendente;
+      except
+        on E: Exception do
+        begin
+          Script.Status := msErro;
+          Script.MensagemErro := E.Message;
+          ErroComando(Script, 'DELETE FROM SCRIPT', E.Message);
+          Log('Erro ao remover registro de ' + Script.Codigo + ' da tabela SCRIPT');
+        end;
+      end;
+    end;
+    AtualizarStatus(Script);
+  end;
 end;
 
 end.

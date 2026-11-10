@@ -7,7 +7,7 @@ uses
   System.Classes, System.IOUtils, System.Generics.Collections, Vcl.Graphics, Vcl.Controls,
   Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.FileCtrl, Vcl.Menus,
   Vcl.Themes, System.UITypes, Controller.Main, Model.MigrationScript, Model.Config,
-  Model.TopServersImport;
+  Model.TopServersImport, Model.MigrationService;
 
 type
   TfrmMain = class(TForm)
@@ -76,6 +76,8 @@ type
     miExcluirScript: TMenuItem;
     miAbrirDiretorio: TMenuItem;
     miDesmarcarTodos: TMenuItem;
+    miEstornarScript: TMenuItem;
+    miExecutarScript: TMenuItem;
     pmLog: TPopupMenu;
     miLimparLog: TMenuItem;
     pnlLog: TPanel;
@@ -108,6 +110,8 @@ type
     procedure pmScriptsPopup(Sender: TObject);
     procedure miExcluirScriptClick(Sender: TObject);
     procedure miDesmarcarTodosClick(Sender: TObject);
+    procedure miEstornarScriptClick(Sender: TObject);
+    procedure miExecutarScriptClick(Sender: TObject);
     procedure miLimparLogClick(Sender: TObject);
     procedure cbxClienteBaseChange(Sender: TObject);
     procedure PreencherVersoes(const ASelecionada: string);
@@ -126,6 +130,7 @@ type
     procedure CarregarVersoesScripts;
     procedure CarregarTemas;
     function ItemDoScript(AScript: TMigrationScript): TListItem;
+    function ScriptsAlvo: TArray<TMigrationScript>;
     procedure AppendLog(const AMsg: string);
     procedure HabilitarControles(AHabilitado: Boolean);
     procedure WMGetMinMaxInfo(var Msg: TWMGetMinMaxInfo); message WM_GETMINMAXINFO;
@@ -670,8 +675,92 @@ begin
   ShellExecute(0, 'open', 'explorer.exe', PChar('/select,"' + Arquivo + '"'), nil, SW_SHOWNORMAL);
 end;
 
-procedure TfrmMain.pmScriptsPopup(Sender: TObject);
+// Scripts marcados na grade; se nao houver, o selecionado.
+function TfrmMain.ScriptsAlvo: TArray<TMigrationScript>;
+var
+  I: Integer;
 begin
+  Result := [];
+  for I := 0 to lvScripts.Items.Count - 1 do
+    if lvScripts.Items[I].Checked then
+      Result := Result + [TMigrationScript(lvScripts.Items[I].Data)];
+  if (Length(Result) = 0) and (lvScripts.Selected <> nil) then
+    Result := [TMigrationScript(lvScripts.Selected.Data)];
+end;
+
+procedure TfrmMain.miEstornarScriptClick(Sender: TObject);
+var
+  Alvo, Validos: TArray<TMigrationScript>;
+  Script: TMigrationScript;
+  Resumo: TResumoEstorno;
+  Mensagem, Aviso: string;
+begin
+  if FController.EstaExecutando then
+    Exit;
+  Alvo := ScriptsAlvo;
+  Validos := [];
+  for Script in Alvo do
+    if FController.PodeEstornar(Script) then
+      Validos := Validos + [Script];
+  if Length(Validos) = 0 then
+  begin
+    MessageDlg('Nenhum dos scripts tem hist'#243'rico de estorno nesta base.'#13#10 +
+      'S'#243' d'#225' para estornar scripts aplicados por este aplicativo.', mtInformation, [mbOK], 0);
+    Exit;
+  end;
+
+  Resumo := FController.ResumoEstorno(Validos);
+  Mensagem := Format('Estornar %d script(s) (do mais novo para o mais antigo)?'#13#10 +
+    '%d comando(s) de desfazer ser'#227'o executados e o registro na tabela SCRIPT ser'#225' removido.',
+    [Length(Validos), Resumo.Reversiveis]);
+  if Length(Resumo.Avisos) > 0 then
+  begin
+    Mensagem := Mensagem + #13#10#13#10 + 'N'#195'O ser'#227'o revertidos:';
+    for Aviso in Resumo.Avisos do
+      Mensagem := Mensagem + #13#10'- ' + Aviso;
+  end;
+  if MessageDlg(Mensagem, mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
+    Exit;
+
+  TelaParaConfig;
+  HabilitarControles(False);
+  FController.EstornarScripts(Validos);
+end;
+
+// Executa so o script selecionado (ignora os marcados), qualquer que seja o status.
+procedure TfrmMain.miExecutarScriptClick(Sender: TObject);
+var
+  Script: TMigrationScript;
+  Mensagem: string;
+begin
+  if (lvScripts.Selected = nil) or FController.EstaExecutando then
+    Exit;
+  Script := TMigrationScript(lvScripts.Selected.Data);
+
+  Mensagem := Format('Executar somente o script %s?', [Script.Codigo]);
+  if Script.Status in [msAplicado, msSucesso] then
+    Mensagem := Mensagem + #13#10#13#10'Ele j'#225' consta como aplicado: os comandos ser'#227'o ' +
+      'executados novamente (o registro na tabela SCRIPT n'#227'o ser'#225' duplicado).';
+  if MessageDlg(Mensagem, mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
+    Exit;
+
+  TelaParaConfig;
+  HabilitarControles(False);
+  FController.ExecutarPendentes([Script]);
+end;
+
+procedure TfrmMain.pmScriptsPopup(Sender: TObject);
+var
+  Script: TMigrationScript;
+  Pode: Boolean;
+begin
+  Pode := False;
+  if not FController.EstaExecutando then
+    for Script in ScriptsAlvo do
+      if FController.PodeEstornar(Script) then
+        Pode := True;
+  miEstornarScript.Enabled := Pode;
+  miExecutarScript.Enabled := (lvScripts.Selected <> nil) and not FController.EstaExecutando;
   miAbrirDiretorio.Enabled := lvScripts.Selected <> nil;
   miDesmarcarTodos.Enabled := lvScripts.Items.Count > 0;
   miExcluirScript.Enabled := (lvScripts.Items.Count > 0) and not FController.EstaExecutando;

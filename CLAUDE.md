@@ -41,6 +41,19 @@ Rodar `cgrc` de dentro de `Assets\`.
   `SET TERM <novo> ;` (blocos PSQL/triggers), e executa **cada comando em sua
   propria transacao implicita** (sem `StartTransaction` explicito) — ver
   gotcha abaixo sobre por que isso e proposital.
+- `Model\Model.UndoBuilder.pas` / `Model\Model.UndoStore.pas` — **estorno**
+  (botao direito > Estornar). Antes de executar cada comando, o `TUndoBuilder`
+  le o estado atual da base (RDB$...) e calcula o(s) comando(s) que o desfazem
+  (DROP do que foi criado, tipo/default/null anterior em ALTER, fonte anterior de
+  procedure/trigger, valores anteriores de UPDATE por PK ate 5000 linhas).
+  `TUndoStore` grava em `bin\estornos\<md5(servidor|.fdb)>\<codigo>.json`.
+  `TMigrationService.EstornarScripts` roda os undos em ordem inversa (scripts do
+  mais novo ao mais antigo), depois `DELETE FROM SCRIPT` e apaga o json. So
+  estorna scripts aplicados pelo app (so grava historico se o script nao estava
+  na tabela SCRIPT). Nao revertido (vira aviso): `DROP`, INSERT/DELETE de dados,
+  UPDATE sem PK, view/funcao pre-existente sobrescrita. Se um undo falhar (ex.:
+  script posterior depende do objeto), o estorno para e o comando que falhou
+  continua no json para nova tentativa.
 - `Controller\Controller.Main.pas` — media View/Model; roda a execucao dos
   scripts numa thread de fundo (`TThread.CreateAnonymousThread`) e repassa
   log/status pra UI via `TThread.Queue`.

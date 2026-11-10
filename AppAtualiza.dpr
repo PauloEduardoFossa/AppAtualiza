@@ -12,7 +12,9 @@ uses
   Model.Config in 'Model\Model.Config.pas',
   Model.MigrationScript in 'Model\Model.MigrationScript.pas',
   Model.MigrationService in 'Model\Model.MigrationService.pas',
-  Model.TopServersImport in 'Model\Model.TopServersImport.pas';
+  Model.TopServersImport in 'Model\Model.TopServersImport.pas',
+  Model.UndoBuilder in 'Model\Model.UndoBuilder.pas',
+  Model.UndoStore in 'Model\Model.UndoStore.pas';
 
 {$R Assets\AppAtualiza.res}
 
