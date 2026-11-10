@@ -14,9 +14,11 @@ uses
   Model.MigrationService in 'Model\Model.MigrationService.pas',
   Model.TopServersImport in 'Model\Model.TopServersImport.pas',
   Model.UndoBuilder in 'Model\Model.UndoBuilder.pas',
-  Model.UndoStore in 'Model\Model.UndoStore.pas';
+  Model.UndoStore in 'Model\Model.UndoStore.pas',
+  Model.Version in 'Model\Model.Version.pas';
 
 {$R Assets\AppAtualiza.res}
+{$R Assets\Versao.res}
 
 function EstiloJaExistia(const ANome: string; const ANomes: TArray<string>): Boolean;
 var

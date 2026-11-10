@@ -1,0 +1,1 @@
+VERSAO_RELEASE = 1;

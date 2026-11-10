@@ -42,6 +42,19 @@ object frmMain: TfrmMain
       Font.Style = [fsBold]
       ParentFont = False
     end
+    object lblVersao: TLabel
+      Left = 118
+      Top = 15
+      Width = 38
+      Height = 15
+      Caption = 'v1.0.0'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clGrayText
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+    end
     object lblSubtitulo: TLabel
       Left = 20
       Top = 36

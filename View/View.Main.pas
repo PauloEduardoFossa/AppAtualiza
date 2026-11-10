@@ -7,12 +7,13 @@ uses
   System.Classes, System.IOUtils, System.Generics.Collections, Vcl.Graphics, Vcl.Controls,
   Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.FileCtrl, Vcl.Menus,
   Vcl.Themes, System.UITypes, Controller.Main, Model.MigrationScript, Model.Config,
-  Model.TopServersImport, Model.MigrationService;
+  Model.TopServersImport, Model.MigrationService, Model.Version;
 
 type
   TfrmMain = class(TForm)
     pnlHeader: TPanel;
     lblTitulo: TLabel;
+    lblVersao: TLabel;
     lblSubtitulo: TLabel;
     lblTema: TLabel;
     cbxTema: TComboBox;
@@ -168,6 +169,7 @@ end;
 procedure TfrmMain.FormCreate(Sender: TObject);
 begin
   FController := TMainController.Create;
+  lblVersao.Caption := 'v' + VersaoTexto;
   lvScripts.HideSelection := False;
   FController.OnLog := AppendLog;
   FController.OnScriptStatus :=

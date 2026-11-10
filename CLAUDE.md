@@ -27,6 +27,23 @@ O `.res` com o icone (`Assets\AppAtualiza.RES`) precisa existir **antes** de com
 (veja "Icone do executavel" abaixo) — o `.dpr` tem `{$R Assets\AppAtualiza.res}`.
 Rodar `cgrc` de dentro de `Assets\`.
 
+## Versao (X.Y.Z)
+
+Mostrada no cabecalho (`lblVersao`, ao lado de "AppAtualiza") e gravada nas
+propriedades do `.exe` (aba Detalhes). Fonte unica: `Model\Model.Version.pas`.
+
+- **X (substituicao)** — `VERSAO_SUBSTITUICAO`, a mao. Sobe quando a mudanca exige
+  apagar tudo e copiar de novo (formato de `config.json`/historico de estorno,
+  pastas, `Styles\`...).
+- **Y (disponibilizacao)** — `VERSAO_DISPONIBILIZACAO`, a mao. Sobe a cada
+  versao entregue para uso.
+- **Z (release)** — contador de builds, **automatico**: o `build.bat` roda
+  `Assets\gerar_versao.ps1`, que incrementa `Assets\build.number`, regrava
+  `Model\Model.Version.Build.inc` e gera `Assets\Versao.rc` (compilado em
+  `Assets\Versao.RES` com `cgrc`; o `.dpr` tem `{$R Assets\Versao.res}`). Nao
+  editar o `.inc`/`build.number` a mao; os dois sao versionados para o contador
+  seguir entre maquinas. Compilar fora do `build.bat` nao incrementa.
+
 ## Arquitetura (MVC)
 
 - `Model\Model.Config.pas` — `TDBConfig` (server/porta/caminho do `.fdb`/usuario/
