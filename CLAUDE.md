@@ -50,8 +50,13 @@ Rodar `cgrc` de dentro de `Assets\`.
   `TMigrationService.EstornarScripts` roda os undos em ordem inversa (scripts do
   mais novo ao mais antigo), depois `DELETE FROM SCRIPT` e apaga o json. So
   estorna scripts aplicados pelo app (so grava historico se o script nao estava
-  na tabela SCRIPT). Nao revertido (vira aviso): `DROP`, INSERT/DELETE de dados,
-  UPDATE sem PK, view/funcao pre-existente sobrescrita. Se um undo falhar (ex.:
+  na tabela SCRIPT). Tambem reverte `DELETE` (guarda as linhas, ate 5000, e
+  recria com INSERT), `DROP CONSTRAINT` (PK/UNIQUE/FK/CHECK), `DROP INDEX` e
+  `DROP` de coluna (recria a coluna e restaura os valores por PK, ate 5000
+  linhas nao nulas). Nao revertido (vira aviso): INSERT de dados, DROP TABLE,
+  DELETE/DROP coluna acima de 5000 linhas ou sem PK, DELETE em tabela com FK
+  ON DELETE CASCADE/SET NULL apontando para ela, UPDATE sem PK,
+  view/funcao pre-existente sobrescrita. Se um undo falhar (ex.:
   script posterior depende do objeto), o estorno para e o comando que falhou
   continua no json para nova tentativa.
 - `Controller\Controller.Main.pas` — media View/Model; roda a execucao dos

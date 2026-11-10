@@ -28,7 +28,16 @@ type
     function NovaQuery(const ASQL: string): TFDQuery;
     function Existe(const ASQL, ANome: string): Boolean;
     function ExisteObjeto(const ATipo, ANomeRDB: string): Boolean;
-    function DefinicaoTipo(const AFieldSource: string): string;
+    function DefinicaoTipo(const AFieldSource: string; AExpandir: Boolean = False): string;
+    function ColunasDoIndice(const AIndiceRDB: string): TArray<string>;
+    function ColunasDaTabela(const ATabelaRDB: string): TArray<string>;
+    function ListaColunas(const ACols: TArray<string>): string;
+    function FkEmCascata(const ATabelaRDB: string): Boolean;
+    procedure UndoDropConstraint(const ATabela, ATabelaRDB, AConstr: string; var R: TUndoComando);
+    procedure UndoDropColuna(const ATabela, ATabelaRDB, ACol: string; var R: TUndoComando);
+    procedure TratarDrop(const ATabela, ATabelaRDB, AResto: string; var R: TUndoComando);
+    function TentarDelete(const ACmd: string; var R: TUndoComando): Boolean;
+    function TentarDropIndex(const ACmd: string; var R: TUndoComando): Boolean;
     function ChavePrimaria(const ATabelaRDB: string): TArray<string>;
     function TamanhoTextoDominio(const ADominioRDB: string; out ATam: Integer): Boolean;
     function TamanhoTextoNovoTipo(const ATipoCmd: string; out ATam: Integer): Boolean;
@@ -55,6 +64,7 @@ implementation
 
 const
   RxNome = '("[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)';
+  LimiteLinhas = 5000; // maximo de linhas guardadas por comando (UPDATE/DELETE/DROP coluna)
 
 function NomeRDB(const AToken: string): string;
 begin
@@ -233,14 +243,14 @@ end;
 
 // Devolve a definicao de tipo: nome do dominio, ou o tipo expandido quando o
 // campo usa um dominio interno (RDB$nnn).
-function TUndoBuilder.DefinicaoTipo(const AFieldSource: string): string;
+function TUndoBuilder.DefinicaoTipo(const AFieldSource: string; AExpandir: Boolean): string;
 var
   Qry: TFDQuery;
   Tipo, Sub, Tam, Prec, Escala, TamChar: Integer;
   Nome: string;
 begin
   Nome := Trim(AFieldSource);
-  if not Nome.StartsWith('RDB$') then
+  if (not AExpandir) and (not Nome.StartsWith('RDB$')) then
     Exit(NomeSql(Nome));
 
   Qry := NovaQuery('SELECT RDB$FIELD_TYPE, RDB$FIELD_SUB_TYPE, RDB$FIELD_LENGTH, ' +
@@ -685,7 +695,7 @@ begin
 
   if TRegEx.IsMatch(Resto, '^DROP\b', [roIgnoreCase]) then
   begin
-    Marcar(R, 'DROP em ' + Tabela + ': dados/definicao removidos nao sao restaurados automaticamente.');
+    TratarDrop(Tabela, TabelaR, Resto, R);
     Exit;
   end;
 
@@ -801,7 +811,7 @@ end;
 
 function TUndoBuilder.TentarUpdate(const ACmd: string; var R: TUndoComando): Boolean;
 const
-  MaxLinhas = 5000;
+  MaxLinhas = LimiteLinhas;
 var
   M: TMatch;
   Tabela, TabelaR, Resto, SetParte, WherePar, Sel, Sql, Atribs, Cond: string;
@@ -913,6 +923,467 @@ begin
   end;
 end;
 
+function Aspas(const ANomeRDB: string): string;
+begin
+  Result := '"' + ANomeRDB + '"';
+end;
+
+function TUndoBuilder.ListaColunas(const ACols: TArray<string>): string;
+var
+  C: string;
+begin
+  Result := '';
+  for C in ACols do
+  begin
+    if Result <> '' then
+      Result := Result + ', ';
+    Result := Result + Aspas(C);
+  end;
+end;
+
+function TUndoBuilder.ColunasDoIndice(const AIndiceRDB: string): TArray<string>;
+var
+  Qry: TFDQuery;
+begin
+  Result := [];
+  Qry := NovaQuery('SELECT TRIM(RDB$FIELD_NAME) FROM RDB$INDEX_SEGMENTS ' +
+    'WHERE RDB$INDEX_NAME = :i ORDER BY RDB$FIELD_POSITION');
+  try
+    Qry.ParamByName('i').AsString := AIndiceRDB;
+    Qry.Open;
+    while not Qry.Eof do
+    begin
+      Result := Result + [Qry.Fields[0].AsString];
+      Qry.Next;
+    end;
+  finally
+    Qry.Free;
+  end;
+end;
+
+// Colunas gravaveis da tabela (exclui calculadas), na ordem da tabela.
+function TUndoBuilder.ColunasDaTabela(const ATabelaRDB: string): TArray<string>;
+var
+  Qry: TFDQuery;
+begin
+  Result := [];
+  Qry := NovaQuery('SELECT TRIM(rf.RDB$FIELD_NAME) FROM RDB$RELATION_FIELDS rf ' +
+    'JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE ' +
+    'WHERE rf.RDB$RELATION_NAME = :r AND f.RDB$COMPUTED_BLR IS NULL ' +
+    'ORDER BY rf.RDB$FIELD_POSITION');
+  try
+    Qry.ParamByName('r').AsString := ATabelaRDB;
+    Qry.Open;
+    while not Qry.Eof do
+    begin
+      Result := Result + [Qry.Fields[0].AsString];
+      Qry.Next;
+    end;
+  finally
+    Qry.Free;
+  end;
+end;
+
+// Alguma FK com ON DELETE CASCADE/SET NULL/SET DEFAULT aponta para a tabela?
+// Nesse caso o DELETE apaga/altera linhas de outras tabelas, que nao guardamos.
+function TUndoBuilder.FkEmCascata(const ATabelaRDB: string): Boolean;
+var
+  Qry: TFDQuery;
+begin
+  Qry := NovaQuery('SELECT 1 FROM RDB$REF_CONSTRAINTS rf ' +
+    'JOIN RDB$RELATION_CONSTRAINTS rc ON rc.RDB$CONSTRAINT_NAME = rf.RDB$CONST_NAME_UQ ' +
+    'WHERE rc.RDB$RELATION_NAME = :r ' +
+    'AND TRIM(rf.RDB$DELETE_RULE) IN (''CASCADE'', ''SET NULL'', ''SET DEFAULT'')');
+  try
+    Qry.ParamByName('r').AsString := ATabelaRDB;
+    Qry.Open;
+    Result := not Qry.Eof;
+  finally
+    Qry.Free;
+  end;
+end;
+
+function TUndoBuilder.TentarDelete(const ACmd: string; var R: TUndoComando): Boolean;
+var
+  M: TMatch;
+  Tabela, TabelaR, Resto, Sql, Valores: string;
+  Cols: TArray<string>;
+  Qry: TFDQuery;
+  I, N: Integer;
+begin
+  M := TRegEx.Match(ACmd, '^DELETE\s+FROM\s+' + RxNome + '(?:\s+(.*))?$',
+    [roIgnoreCase, roSingleLine]);
+  Result := M.Success;
+  if not Result then
+    Exit;
+
+  Tabela := M.Groups[1].Value;
+  TabelaR := NomeRDB(Tabela);
+  // Grupo opcional que nao participou do match nao existe em Groups (Delphi).
+  if M.Groups.Count > 2 then
+    Resto := Trim(M.Groups[2].Value)
+  else
+    Resto := '';
+
+  if FCriados.IndexOf(TabelaR) >= 0 then
+    Exit; // tabela criada neste script: o DROP TABLE cobre
+
+  if (Resto <> '') and not TRegEx.IsMatch(Resto, '^WHERE\b', [roIgnoreCase]) then
+  begin
+    Marcar(R, 'DELETE em ' + Tabela + ' com alias/clausula nao suportada: sem inverso automatico.');
+    Exit;
+  end;
+  if (PosPalavraTopLevel(Resto, 'RETURNING') > 0) or (PosPalavraTopLevel(Resto, 'ROWS') > 0) or
+     (PosPalavraTopLevel(Resto, 'ORDER') > 0) then
+  begin
+    Marcar(R, 'DELETE em ' + Tabela + ' com RETURNING/ROWS/ORDER BY: sem inverso automatico.');
+    Exit;
+  end;
+  if FkEmCascata(TabelaR) then
+  begin
+    Marcar(R, 'DELETE em ' + Tabela + ': ha FK com ON DELETE CASCADE/SET NULL apontando para ela; ' +
+      'linhas de outras tabelas tambem seriam afetadas e nao sao guardadas.');
+    Exit;
+  end;
+
+  Cols := ColunasDaTabela(TabelaR);
+  if Length(Cols) = 0 then
+  begin
+    Marcar(R, 'DELETE em ' + Tabela + ': colunas da tabela nao encontradas.');
+    Exit;
+  end;
+
+  Sql := 'SELECT FIRST ' + IntToStr(LimiteLinhas + 1) + ' ' + ListaColunas(Cols) +
+    ' FROM ' + Tabela;
+  if Resto <> '' then
+    Sql := Sql + ' ' + Resto;
+
+  Qry := NovaQuery(Sql);
+  try
+    Qry.Open;
+    N := 0;
+    while not Qry.Eof do
+    begin
+      Inc(N);
+      if N > LimiteLinhas then
+      begin
+        Marcar(R, Format('DELETE em %s afeta mais de %d linhas: linhas apagadas nao guardadas.',
+          [Tabela, LimiteLinhas]));
+        Exit;
+      end;
+      Valores := '';
+      for I := 0 to Qry.FieldCount - 1 do
+      begin
+        if I > 0 then
+          Valores := Valores + ', ';
+        Valores := Valores + Literal(Qry.Fields[I]);
+      end;
+      AddUndo(R, 'INSERT INTO ' + Tabela + ' (' + ListaColunas(Cols) + ') VALUES (' + Valores + ')');
+      Qry.Next;
+    end;
+  finally
+    Qry.Free;
+  end;
+end;
+
+function TUndoBuilder.TentarDropIndex(const ACmd: string; var R: TUndoComando): Boolean;
+var
+  M: TMatch;
+  Nome, NomeR, Tabela, Def, Expr: string;
+  Qry: TFDQuery;
+  Unico, Desc, Inativo: Boolean;
+begin
+  M := TRegEx.Match(ACmd, '^DROP\s+INDEX\s+' + RxNome + '\s*$', [roIgnoreCase]);
+  Result := M.Success;
+  if not Result then
+    Exit;
+
+  Nome := M.Groups[1].Value;
+  NomeR := NomeRDB(Nome);
+  Qry := NovaQuery('SELECT TRIM(RDB$RELATION_NAME), RDB$UNIQUE_FLAG, RDB$INDEX_TYPE, ' +
+    'RDB$INDEX_INACTIVE, RDB$EXPRESSION_SOURCE FROM RDB$INDICES WHERE RDB$INDEX_NAME = :n');
+  try
+    Qry.ParamByName('n').AsString := NomeR;
+    Qry.Open;
+    if Qry.Eof then
+    begin
+      Marcar(R, 'Indice ' + Nome + ' nao encontrado para capturar a definicao.');
+      Exit;
+    end;
+    Tabela := Qry.Fields[0].AsString;
+    Unico := Qry.Fields[1].AsInteger = 1;
+    Desc := Qry.Fields[2].AsInteger = 1;
+    Inativo := Qry.Fields[3].AsInteger = 1;
+    if Qry.Fields[4].IsNull then
+      Expr := ''
+    else
+      Expr := Trim(Qry.Fields[4].AsString);
+  finally
+    Qry.Free;
+  end;
+
+  if Expr <> '' then
+  begin
+    if not Expr.StartsWith('(') then
+      Expr := '(' + Expr + ')';
+    Def := 'COMPUTED BY ' + Expr;
+  end
+  else
+    Def := '(' + ListaColunas(ColunasDoIndice(NomeR)) + ')';
+
+  Expr := 'CREATE ';
+  if Unico then
+    Expr := Expr + 'UNIQUE ';
+  if Desc then
+    Expr := Expr + 'DESCENDING ';
+  AddUndo(R, Expr + 'INDEX ' + Nome + ' ON ' + Aspas(Tabela) + ' ' + Def);
+  if Inativo then
+    AddUndo(R, 'ALTER INDEX ' + Nome + ' INACTIVE');
+end;
+
+procedure TUndoBuilder.UndoDropConstraint(const ATabela, ATabelaRDB, AConstr: string;
+  var R: TUndoComando);
+var
+  Qry: TFDQuery;
+  ConstrR, Tipo, Indice, Prefixo, Usando, UQ, TabRef, IdxRef, RegraDel, RegraUpd, Fonte: string;
+begin
+  ConstrR := NomeRDB(AConstr);
+  Qry := NovaQuery('SELECT TRIM(RDB$CONSTRAINT_TYPE), TRIM(RDB$INDEX_NAME) ' +
+    'FROM RDB$RELATION_CONSTRAINTS WHERE RDB$RELATION_NAME = :r AND RDB$CONSTRAINT_NAME = :c');
+  try
+    Qry.ParamByName('r').AsString := ATabelaRDB;
+    Qry.ParamByName('c').AsString := ConstrR;
+    Qry.Open;
+    if Qry.Eof then
+    begin
+      Marcar(R, 'Constraint ' + AConstr + ' nao encontrada para capturar a definicao.');
+      Exit;
+    end;
+    Tipo := Qry.Fields[0].AsString;
+    Indice := Qry.Fields[1].AsString;
+  finally
+    Qry.Free;
+  end;
+
+  Prefixo := 'ALTER TABLE ' + ATabela + ' ADD CONSTRAINT ' + AConstr + ' ';
+  Usando := '';
+  if (Indice <> '') and (Indice <> ConstrR) then
+    Usando := ' USING INDEX ' + Aspas(Indice);
+
+  if (Tipo = 'PRIMARY KEY') or (Tipo = 'UNIQUE') then
+    AddUndo(R, Prefixo + Tipo + ' (' + ListaColunas(ColunasDoIndice(Indice)) + ')' + Usando)
+  else if Tipo = 'FOREIGN KEY' then
+  begin
+    Qry := NovaQuery('SELECT TRIM(rf.RDB$CONST_NAME_UQ), TRIM(rf.RDB$UPDATE_RULE), ' +
+      'TRIM(rf.RDB$DELETE_RULE) FROM RDB$REF_CONSTRAINTS rf WHERE rf.RDB$CONSTRAINT_NAME = :c');
+    try
+      Qry.ParamByName('c').AsString := ConstrR;
+      Qry.Open;
+      if Qry.Eof then
+      begin
+        Marcar(R, 'FK ' + AConstr + ': definicao nao encontrada.');
+        Exit;
+      end;
+      UQ := Qry.Fields[0].AsString;
+      RegraUpd := Qry.Fields[1].AsString;
+      RegraDel := Qry.Fields[2].AsString;
+    finally
+      Qry.Free;
+    end;
+    Qry := NovaQuery('SELECT TRIM(RDB$RELATION_NAME), TRIM(RDB$INDEX_NAME) ' +
+      'FROM RDB$RELATION_CONSTRAINTS WHERE RDB$CONSTRAINT_NAME = :c');
+    try
+      Qry.ParamByName('c').AsString := UQ;
+      Qry.Open;
+      if Qry.Eof then
+      begin
+        Marcar(R, 'FK ' + AConstr + ': tabela referenciada nao encontrada.');
+        Exit;
+      end;
+      TabRef := Qry.Fields[0].AsString;
+      IdxRef := Qry.Fields[1].AsString;
+    finally
+      Qry.Free;
+    end;
+    Fonte := Prefixo + 'FOREIGN KEY (' + ListaColunas(ColunasDoIndice(Indice)) + ') REFERENCES ' +
+      Aspas(TabRef) + ' (' + ListaColunas(ColunasDoIndice(IdxRef)) + ')';
+    // RESTRICT e o que o Firebird grava quando a clausula e omitida.
+    if RegraDel <> 'RESTRICT' then
+      Fonte := Fonte + ' ON DELETE ' + RegraDel;
+    if RegraUpd <> 'RESTRICT' then
+      Fonte := Fonte + ' ON UPDATE ' + RegraUpd;
+    AddUndo(R, Fonte + Usando);
+  end
+  else if Tipo = 'CHECK' then
+  begin
+    Qry := NovaQuery('SELECT t.RDB$TRIGGER_SOURCE FROM RDB$CHECK_CONSTRAINTS cc ' +
+      'JOIN RDB$TRIGGERS t ON t.RDB$TRIGGER_NAME = cc.RDB$TRIGGER_NAME ' +
+      'WHERE cc.RDB$CONSTRAINT_NAME = :c AND t.RDB$TRIGGER_TYPE = 1');
+    try
+      Qry.ParamByName('c').AsString := ConstrR;
+      Qry.Open;
+      if Qry.Eof or Qry.Fields[0].IsNull then
+      begin
+        Marcar(R, 'CHECK ' + AConstr + ': definicao nao encontrada.');
+        Exit;
+      end;
+      Fonte := Trim(Qry.Fields[0].AsString);
+    finally
+      Qry.Free;
+    end;
+    AddUndo(R, Prefixo + Fonte);
+  end
+  else
+    Marcar(R, 'Constraint ' + AConstr + ' (' + Tipo + '): sem inverso automatico.');
+end;
+
+procedure TUndoBuilder.UndoDropColuna(const ATabela, ATabelaRDB, ACol: string; var R: TUndoComando);
+var
+  Qry: TFDQuery;
+  ColR, FieldSrc, PadraoRel, Base, Prefixo, Cond, Pk1, Sql: string;
+  NullRel, NullDom, Computada: Boolean;
+  Posicao, I, N, QtdPk: Integer;
+  Pk: TArray<string>;
+begin
+  ColR := NomeRDB(ACol);
+  Prefixo := 'ALTER TABLE ' + ATabela + ' ';
+
+  Qry := NovaQuery('SELECT rf.RDB$FIELD_SOURCE, rf.RDB$NULL_FLAG, rf.RDB$DEFAULT_SOURCE, ' +
+    'rf.RDB$FIELD_POSITION, f.RDB$NULL_FLAG, f.RDB$COMPUTED_BLR FROM RDB$RELATION_FIELDS rf ' +
+    'JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE ' +
+    'WHERE rf.RDB$RELATION_NAME = :r AND rf.RDB$FIELD_NAME = :f');
+  try
+    Qry.ParamByName('r').AsString := ATabelaRDB;
+    Qry.ParamByName('f').AsString := ColR;
+    Qry.Open;
+    if Qry.Eof then
+    begin
+      Marcar(R, 'Coluna ' + ATabela + '.' + ACol + ' nao encontrada para capturar a definicao.');
+      Exit;
+    end;
+    FieldSrc := Trim(Qry.Fields[0].AsString);
+    NullRel := Qry.Fields[1].AsInteger = 1;
+    PadraoRel := '';
+    if not Qry.Fields[2].IsNull then
+      PadraoRel := Trim(Qry.Fields[2].AsString);
+    Posicao := Qry.Fields[3].AsInteger + 1;
+    NullDom := Qry.Fields[4].AsInteger = 1;
+    Computada := not Qry.Fields[5].IsNull;
+  finally
+    Qry.Free;
+  end;
+
+  if Computada then
+  begin
+    Marcar(R, 'Coluna calculada ' + ATabela + '.' + ACol + ': sem inverso automatico.');
+    Exit;
+  end;
+
+  // Valores atuais (so os nao nulos: a coluna recriada nasce nula).
+  Pk := ChavePrimaria(ATabelaRDB);
+  Cond := '';
+  if Length(Pk) = 0 then
+  begin
+    Qry := NovaQuery('SELECT FIRST 1 1 FROM ' + ATabela + ' WHERE ' + Aspas(ColR) + ' IS NOT NULL');
+    try
+      Qry.Open;
+      if not Qry.Eof then
+      begin
+        Marcar(R, 'DROP da coluna ' + ATabela + '.' + ACol + ' com dados e sem chave primaria: ' +
+          'valores nao podem ser restaurados.');
+        Exit;
+      end;
+    finally
+      Qry.Free;
+    end;
+    QtdPk := 0;
+  end
+  else
+    QtdPk := Length(Pk);
+
+  // Monta os UPDATEs de restauracao antes de gravar qualquer undo, para que um
+  // estouro do limite nao deixe um undo pela metade.
+  Sql := '';
+  Base := FieldSrc;
+  if QtdPk > 0 then
+  begin
+    Pk1 := ListaColunas(Pk) + ', ' + Aspas(ColR);
+    Qry := NovaQuery('SELECT FIRST ' + IntToStr(LimiteLinhas + 1) + ' ' + Pk1 + ' FROM ' + ATabela +
+      ' WHERE ' + Aspas(ColR) + ' IS NOT NULL');
+    try
+      Qry.Open;
+      N := 0;
+      while not Qry.Eof do
+      begin
+        Inc(N);
+        if N > LimiteLinhas then
+        begin
+          Marcar(R, Format('DROP da coluna %s.%s com valores em mais de %d linhas: ' +
+            'valores nao guardados.', [ATabela, ACol, LimiteLinhas]));
+          Exit;
+        end;
+        Cond := '';
+        for I := 0 to QtdPk - 1 do
+        begin
+          if I > 0 then
+            Cond := Cond + ' AND ';
+          Cond := Cond + Aspas(Pk[I]) + ' = ' + Literal(Qry.Fields[I]);
+        end;
+        Sql := Sql + 'UPDATE ' + ATabela + ' SET ' + Aspas(ColR) + ' = ' +
+          Literal(Qry.Fields[QtdPk]) + ' WHERE ' + Cond + #1;
+        Qry.Next;
+      end;
+    finally
+      Qry.Free;
+    end;
+  end;
+
+  // Se o dominio e NOT NULL a coluna e recriada com o tipo base (permite
+  // popular) e so depois volta para o dominio.
+  if NullDom then
+    Base := DefinicaoTipo(FieldSrc, True)
+  else
+    Base := DefinicaoTipo(FieldSrc);
+  AddUndo(R, Prefixo + 'ADD ' + Aspas(ColR) + ' ' + Base);
+  for Cond in Sql.Split([#1], TStringSplitOptions.ExcludeEmpty) do
+    AddUndo(R, Cond);
+  if NullDom and not FieldSrc.StartsWith('RDB$') then
+    AddUndo(R, Prefixo + 'ALTER ' + Aspas(ColR) + ' TYPE ' + DefinicaoTipo(FieldSrc))
+  else if NullRel or NullDom then
+    AddUndo(R, Prefixo + 'ALTER ' + Aspas(ColR) + ' SET NOT NULL');
+  if PadraoRel <> '' then
+  begin
+    if PadraoRel.ToUpper.StartsWith('DEFAULT') then
+      PadraoRel := Trim(PadraoRel.Substring(7));
+    AddUndo(R, Prefixo + 'ALTER ' + Aspas(ColR) + ' SET DEFAULT ' + PadraoRel);
+  end;
+  AddUndo(R, Prefixo + 'ALTER ' + Aspas(ColR) + ' POSITION ' + IntToStr(Posicao));
+end;
+
+procedure TUndoBuilder.TratarDrop(const ATabela, ATabelaRDB, AResto: string; var R: TUndoComando);
+var
+  M: TMatch;
+begin
+  if TRegEx.Matches(AResto, '\bDROP\b', [roIgnoreCase]).Count > 1 then
+  begin
+    Marcar(R, 'ALTER TABLE com varios DROP no mesmo comando: sem inverso automatico.');
+    Exit;
+  end;
+  M := TRegEx.Match(AResto, '^DROP\s+CONSTRAINT\s+' + RxNome + '\s*$', [roIgnoreCase]);
+  if M.Success then
+  begin
+    UndoDropConstraint(ATabela, ATabelaRDB, M.Groups[1].Value, R);
+    Exit;
+  end;
+  M := TRegEx.Match(AResto, '^DROP\s+(?:COLUMN\s+)?' + RxNome + '\s*$', [roIgnoreCase]);
+  if M.Success then
+  begin
+    UndoDropColuna(ATabela, ATabelaRDB, M.Groups[1].Value, R);
+    Exit;
+  end;
+  Marcar(R, 'DROP em ' + ATabela + ': sem inverso automatico.');
+end;
+
 function TUndoBuilder.Preparar(const ACmd: string): TUndoComando;
 var
   Cmd: string;
@@ -934,6 +1405,10 @@ begin
     if TentarAlterTable(Cmd, Result) then
       Exit;
     if TentarGerador(Cmd, Result) then
+      Exit;
+    if TentarDelete(Cmd, Result) then
+      Exit;
+    if TentarDropIndex(Cmd, Result) then
       Exit;
     if TentarUpdate(Cmd, Result) then
       Exit;
