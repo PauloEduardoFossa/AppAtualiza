@@ -520,7 +520,8 @@ begin
       Estado := 'INACTIVE'
     else
       Estado := 'ACTIVE';
-    Fonte := Qry.Fields[4].AsString;
+    // RDB$TRIGGER_SOURCE inclui o "AS" inicial (RDB$PROCEDURE_SOURCE nao inclui).
+    Fonte := TRegEx.Replace(Qry.Fields[4].AsString, '^\s*AS\b', '', [roIgnoreCase]);
     T1 := Tipo + 1;
     if (T1 and 1) = 1 then
       Quando := 'AFTER'
