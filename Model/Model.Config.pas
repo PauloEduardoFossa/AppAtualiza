@@ -23,8 +23,8 @@ type
     FScriptsRoot: string;
     FScriptsVersion: string;
     FStopOnError: Boolean;
-    FThemeName: string;
     FClientName: string;
+    FTopServersKey: string;
     class function Ofuscar(const S: string): string; static;
     class function Desofuscar(const S: string): string; static;
   public
@@ -36,8 +36,9 @@ type
     property ScriptsRoot: string read FScriptsRoot write FScriptsRoot;
     property ScriptsVersion: string read FScriptsVersion write FScriptsVersion;
     property StopOnError: Boolean read FStopOnError write FStopOnError;
-    property ThemeName: string read FThemeName write FThemeName;
     property ClientName: string read FClientName write FClientName;
+    // segredo usado para decifrar a senha dos topservers*.config (nao versionado)
+    property TopServersKey: string read FTopServersKey write FTopServersKey;
   end;
 
 function DefaultConfigFileName: string;
@@ -94,8 +95,8 @@ begin
   FScriptsRoot := '';
   FScriptsVersion := '';
   FStopOnError := True;
-  FThemeName := '';
   FClientName := '';
+  FTopServersKey := '';
 end;
 
 procedure TAppConfig.LoadFromFile(const AFileName: string);
@@ -128,8 +129,8 @@ begin
     else
       FScriptsFolder := FScriptsRoot;
     FStopOnError := Raiz.GetValue<Boolean>('stopOnError', FStopOnError);
-    FThemeName := Raiz.GetValue<string>('themeName', FThemeName);
     FClientName := Raiz.GetValue<string>('clientName', FClientName);
+    FTopServersKey := Raiz.GetValue<string>('topServersKey', FTopServersKey);
   finally
     Raiz.Free;
   end;
@@ -153,8 +154,8 @@ begin
     Raiz.AddPair('scriptsFolder', FScriptsRoot);
     Raiz.AddPair('scriptsVersion', FScriptsVersion);
     Raiz.AddPair('stopOnError', TJSONBool.Create(FStopOnError));
-    Raiz.AddPair('themeName', FThemeName);
     Raiz.AddPair('clientName', FClientName);
+    Raiz.AddPair('topServersKey', FTopServersKey);
     TFile.WriteAllText(AFileName, Raiz.ToJSON, TEncoding.UTF8);
   finally
     Raiz.Free;

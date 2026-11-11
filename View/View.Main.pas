@@ -7,7 +7,7 @@ uses
   System.Classes, System.IOUtils, System.Generics.Collections, Vcl.Graphics, Vcl.Controls,
   Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.FileCtrl, Vcl.Menus,
   Vcl.Themes, System.UITypes, Controller.Main, Model.MigrationScript, Model.Config,
-  Model.TopServersImport, Model.MigrationService, Model.Version;
+  Model.TopServersImport, Model.TopServersCrypto, View.GlyphIcons, Model.MigrationService, Model.Version;
 
 type
   TfrmMain = class(TForm)
@@ -15,8 +15,6 @@ type
     lblTitulo: TLabel;
     lblVersao: TLabel;
     lblSubtitulo: TLabel;
-    lblTema: TLabel;
-    cbxTema: TComboBox;
     btnMaximizar: TButton;
     btnFechar: TButton;
     pnlSidebar: TPanel;
@@ -25,7 +23,7 @@ type
     cbxClienteBase: TComboBox;
     btnRecarregarBases: TButton;
     btnAtivarBase: TButton;
-    btnMigrarBases: TButton;
+    lblMigrarBases: TLabel;
     lblServidor: TLabel;
     edtServidor: TEdit;
     lblPorta: TLabel;
@@ -124,7 +122,6 @@ type
     procedure PreencherVersoes(const ASelecionada: string);
     procedure cbxVersaoScriptsChange(Sender: TObject);
     procedure cbxVersaoScriptsDropDown(Sender: TObject);
-    procedure cbxTemaChange(Sender: TObject);
   private
     FController: TMainController;
     FTopServers: TArray<TTopServerEntry>;
@@ -135,7 +132,7 @@ type
     procedure RecarregarGrid;
     procedure CarregarClientesBase;
     procedure CarregarVersoesScripts;
-    procedure CarregarTemas;
+    procedure ConfigurarIconesToolbar;
     function ItemDoScript(AScript: TMigrationScript): TListItem;
     function ScriptsAlvo: TArray<TMigrationScript>;
     procedure AppendLog(const AMsg: string);
@@ -206,7 +203,76 @@ begin
   ConfigParaTela;
   CarregarClientesBase;
   CarregarVersoesScripts;
-  CarregarTemas;
+  ConfigurarIconesToolbar;
+end;
+
+// Icones da barra de botoes (glifos da Segoe MDL2 Assets, gerados em tempo de execucao).
+// Sem a fonte (Windows antigo) os botoes ficam so com texto.
+procedure TfrmMain.ConfigurarIconesToolbar;
+type
+  TIcone = record
+    Botao: TButton;
+    Glifo: Word;
+    Cor: TColor;
+    SoIcone: Boolean;
+  end;
+var
+  Neutra, Desab: TColor;
+  Lista: TImageList;
+  Itens: array of TIcone;
+  Glifos: array of Word;
+  Cores: array of TColor;
+  I, N: Integer;
+
+  procedure Add(ABotao: TButton; AGlifo: Word; ACor: TColor; ASoIcone: Boolean = False);
+  begin
+    SetLength(Itens, Length(Itens) + 1);
+    Itens[High(Itens)].Botao := ABotao;
+    Itens[High(Itens)].Glifo := AGlifo;
+    Itens[High(Itens)].Cor := ACor;
+    Itens[High(Itens)].SoIcone := ASoIcone;
+  end;
+
+begin
+  if not FonteDeIconesDisponivel then
+    Exit;
+  Neutra := TStyleManager.ActiveStyle.GetStyleFontColor(sfButtonTextNormal);
+  Desab := TStyleManager.ActiveStyle.GetStyleFontColor(sfButtonTextDisabled);
+
+  Add(btnAtualizarLista, $E72C, RGB(100, 181, 246));      // Sync
+  Add(btnVersaoAnterior, $E76B, Neutra, True);            // ChevronLeft
+  Add(btnProximaVersao, $E76C, Neutra, True);             // ChevronRight
+  Add(btnExecutar, $E102, RGB(76, 175, 80));              // Play (preenchido)
+  Add(btnParar, $E71A, RGB(239, 83, 80));                 // Stop
+
+  N := Length(Itens);
+  SetLength(Glifos, N);
+  SetLength(Cores, N);
+  for I := 0 to N - 1 do
+  begin
+    Glifos[I] := Itens[I].Glifo;
+    Cores[I] := Itens[I].Cor;
+  end;
+  Lista := CriarImageListGlifos(Self, Glifos, Cores, 20, Desab);
+
+  for I := 0 to N - 1 do
+    with Itens[I].Botao do
+    begin
+      Images := Lista;
+      ImageIndex := I;
+      DisabledImageIndex := N + I;
+      if Itens[I].SoIcone then
+      begin
+        Caption := '';
+        ImageAlignment := TImageAlignment.iaCenter;
+      end
+      else
+      begin
+        ImageAlignment := TImageAlignment.iaLeft;
+        ImageMargins.Left := 12;
+        ImageMargins.Right := 4;
+      end;
+    end;
 end;
 
 procedure TfrmMain.FormDestroy(Sender: TObject);
@@ -281,8 +347,6 @@ begin
     FController.Config.ScriptsVersion := '';
   end;
   FController.Config.StopOnError := chkPararErro.Checked;
-  if cbxTema.ItemIndex >= 0 then
-    FController.Config.ThemeName := cbxTema.Items[cbxTema.ItemIndex];
   if cbxClienteBase.ItemIndex >= 0 then
     FController.Config.ClientName := cbxClienteBase.Items[cbxClienteBase.ItemIndex]
   else
@@ -324,8 +388,8 @@ begin
   Soltos := 0;
   if TDirectory.Exists(PASTA_SERVER_PADRAO) then
     Soltos := Length(TDirectory.GetFiles(PASTA_SERVER_PADRAO, 'topservers - *.config'));
-  btnMigrarBases.Visible := Soltos > 0;
-  btnMigrarBases.Caption := Format('Migrar soltos (%d)', [Soltos]);
+  lblMigrarBases.Visible := Soltos > 0;
+  lblMigrarBases.Caption := Format('Migrar %d soltos', [Soltos]);
   btnAtivarBase.Enabled := cbxClienteBase.Items.Count > 0;
 end;
 
@@ -394,6 +458,16 @@ begin
   edtPorta.Text := IntToStr(Entry.Porta);
   edtCaminhoBanco.Text := Entry.Caminho;
   edtUsuario.Text := Entry.Usuario;
+  try
+    edtSenha.Text := DescriptografarSenhaTopServer(Entry.SenhaCifrada,
+      FController.Config.TopServersKey);
+  except
+    on E: Exception do
+    begin
+      edtSenha.Text := '';
+      AppendLog('N'#227'o foi poss'#237'vel ler a senha de "' + Entry.NomeExibicao + '": ' + E.Message);
+    end;
+  end;
 end;
 
 procedure TfrmMain.CarregarVersoesScripts;
@@ -410,7 +484,17 @@ begin
   if not ((FRaizVersoes <> '') and (Selecionada <> '') and
           SameText(ExcludeTrailingPathDelimiter(Pasta),
                    TPath.Combine(FRaizVersoes, Selecionada))) then
+  begin
     FRaizVersoes := ExcludeTrailingPathDelimiter(Pasta);
+    // Pasta ja e uma versao especifica (nao tem subpastas): lista as versoes
+    // da pasta anterior e deixa esta selecionada.
+    if (FRaizVersoes <> '') and TDirectory.Exists(FRaizVersoes) and
+       (Length(TDirectory.GetDirectories(FRaizVersoes)) = 0) then
+    begin
+      Selecionada := ExtractFileName(FRaizVersoes);
+      FRaizVersoes := ExcludeTrailingPathDelimiter(ExtractFilePath(FRaizVersoes));
+    end;
+  end;
   PreencherVersoes(Selecionada);
 end;
 
@@ -441,32 +525,6 @@ begin
     Exit;
   edtPastaScripts.Text := TPath.Combine(FRaizVersoes,
     cbxVersaoScripts.Items[cbxVersaoScripts.ItemIndex]);
-end;
-
-procedure TfrmMain.CarregarTemas;
-var
-  Nome: string;
-  Idx: Integer;
-begin
-  cbxTema.Items.Clear;
-  for Nome in TStyleManager.StyleNames do
-    cbxTema.Items.Add(Nome);
-
-  if (FController.Config.ThemeName <> '') and
-     (cbxTema.Items.IndexOf(FController.Config.ThemeName) >= 0) then
-    TStyleManager.TrySetStyle(FController.Config.ThemeName);
-
-  Idx := cbxTema.Items.IndexOf(TStyleManager.ActiveStyle.Name);
-  cbxTema.ItemIndex := Idx;
-end;
-
-procedure TfrmMain.cbxTemaChange(Sender: TObject);
-begin
-  if cbxTema.ItemIndex < 0 then
-    Exit;
-  TStyleManager.TrySetStyle(cbxTema.Items[cbxTema.ItemIndex]);
-  FController.Config.ThemeName := cbxTema.Items[cbxTema.ItemIndex];
-  FController.SalvarConfiguracao;
 end;
 
 procedure TfrmMain.btnBrowseBancoClick(Sender: TObject);

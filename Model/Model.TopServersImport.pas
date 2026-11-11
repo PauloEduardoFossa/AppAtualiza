@@ -13,6 +13,7 @@ type
     Porta: Integer;
     Caminho: string;
     Usuario: string;
+    SenhaCifrada: string; // como esta no arquivo; decifrar com DescriptografarSenhaTopServer
     Arquivo: string; // arquivo de origem
     EhAtual: Boolean; // True = topservers.config (o que o sistema le)
   end;
@@ -90,6 +91,7 @@ begin
       AEntry.Porta := JBanco.GetValue<Integer>('porta', 0);
       AEntry.Caminho := JBanco.GetValue<string>('path', '');
       AEntry.Usuario := JBanco.GetValue<string>('usuario', '');
+      AEntry.SenhaCifrada := JBanco.GetValue<string>('senha', '');
       AEntry.Arquivo := AArquivo;
       Result := (AEntry.Host <> '') and (AEntry.Caminho <> '');
       if not Result then

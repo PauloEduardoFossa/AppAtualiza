@@ -1,7 +1,6 @@
-# Saida de build (exe, config.json e logs ficam em bin/; Styles/ e versionada)
+# Saida de build (exe, config.json e logs ficam em bin/)
 dcu/
 bin/*
-!bin/Styles/
 *.exe
 *.dcu
 *.map

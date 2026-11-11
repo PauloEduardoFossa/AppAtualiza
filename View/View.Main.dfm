@@ -63,24 +63,6 @@ object frmMain: TfrmMain
       Caption =
         'Executor de Scripts de Atualiza'#231#227'o de Banco de Dados'
     end
-    object lblTema: TLabel
-      Left = 906
-      Top = 24
-      Width = 32
-      Height = 15
-      Anchors = [akTop, akRight]
-      Caption = 'Tema:'
-    end
-    object cbxTema: TComboBox
-      Left = 946
-      Top = 20
-      Width = 130
-      Height = 23
-      Anchors = [akTop, akRight]
-      Style = csDropDownList
-      TabOrder = 1
-      OnChange = cbxTemaChange
-    end
     object btnMaximizar: TButton
       Left = 1092
       Top = 16
@@ -133,56 +115,56 @@ object frmMain: TfrmMain
     end
     object lblServidor: TLabel
       Left = 20
-      Top = 92
+      Top = 132
       Width = 45
       Height = 15
       Caption = 'Servidor'
     end
     object lblPorta: TLabel
       Left = 20
-      Top = 142
+      Top = 182
       Width = 30
       Height = 15
       Caption = 'Porta'
     end
     object lblCaminhoBanco: TLabel
       Left = 20
-      Top = 192
+      Top = 232
       Width = 143
       Height = 15
       Caption = 'Caminho do Banco (.FDB)'
     end
     object lblUsuario: TLabel
       Left = 20
-      Top = 242
+      Top = 282
       Width = 46
       Height = 15
       Caption = 'Usu'#225'rio'
     end
     object lblSenha: TLabel
       Left = 20
-      Top = 292
+      Top = 332
       Width = 35
       Height = 15
       Caption = 'Senha'
     end
     object lblCharset: TLabel
       Left = 20
-      Top = 342
+      Top = 382
       Width = 43
       Height = 15
       Caption = 'Charset'
     end
     object lblFbClient: TLabel
       Left = 20
-      Top = 392
+      Top = 432
       Width = 168
       Height = 15
       Caption = 'fbclient.dll (opcional)'
     end
     object lblSecaoScripts: TLabel
       Left = 20
-      Top = 447
+      Top = 487
       Width = 47
       Height = 15
       Caption = 'SCRIPTS'
@@ -195,63 +177,76 @@ object frmMain: TfrmMain
     end
     object lblVersaoScripts: TLabel
       Left = 20
-      Top = 473
+      Top = 513
       Width = 88
       Height = 15
       Caption = 'Vers'#227'o dos Scripts'
     end
     object lblPastaScripts: TLabel
       Left = 20
-      Top = 523
+      Top = 563
       Width = 100
       Height = 15
       Caption = 'Pasta dos Scripts'
     end
     object lblStatusConexao: TLabel
       Left = 20
-      Top = 692
+      Top = 732
       Width = 3
       Height = 15
     end
     object cbxClienteBase: TComboBox
       Left = 20
       Top = 60
-      Width = 270
+      Width = 390
       Height = 23
       AutoDropDown = True
       TabOrder = 0
       OnChange = cbxClienteBaseChange
     end
     object btnRecarregarBases: TButton
-      Left = 296
+      Left = 420
       Top = 59
-      Width = 70
+      Width = 60
       Height = 25
-      Caption = 'Recarregar'
+      Hint = 'Recarregar lista de bases'
+      Caption = #8635
+      ParentShowHint = False
+      ShowHint = True
       TabOrder = 20
       OnClick = btnRecarregarBasesClick
     end
     object btnAtivarBase: TButton
-      Left = 372
-      Top = 59
-      Width = 108
-      Height = 25
+      Left = 20
+      Top = 90
+      Width = 460
+      Height = 32
       Caption = 'Ativar esta base'
       TabOrder = 21
       OnClick = btnAtivarBaseClick
     end
-    object btnMigrarBases: TButton
-      Left = 380
-      Top = 37
-      Width = 100
-      Height = 21
+    object lblMigrarBases: TLabel
+      Left = 330
+      Top = 42
+      Width = 150
+      Height = 15
+      Cursor = crHandPoint
+      Alignment = taRightJustify
+      AutoSize = False
       Caption = 'Migrar soltos'
-      TabOrder = 22
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clHotLight
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = [fsUnderline]
+      ParentFont = False
+      StyleElements = [seClient, seBorder]
+      Visible = False
       OnClick = btnMigrarBasesClick
     end
     object edtServidor: TEdit
       Left = 20
-      Top = 110
+      Top = 150
       Width = 460
       Height = 23
       TabOrder = 1
@@ -259,7 +254,7 @@ object frmMain: TfrmMain
     end
     object edtPorta: TEdit
       Left = 20
-      Top = 160
+      Top = 200
       Width = 100
       Height = 23
       TabOrder = 2
@@ -267,14 +262,14 @@ object frmMain: TfrmMain
     end
     object edtCaminhoBanco: TEdit
       Left = 20
-      Top = 210
+      Top = 250
       Width = 390
       Height = 23
       TabOrder = 3
     end
     object btnBrowseBanco: TButton
       Left = 420
-      Top = 209
+      Top = 249
       Width = 60
       Height = 25
       Caption = '...'
@@ -283,7 +278,7 @@ object frmMain: TfrmMain
     end
     object edtUsuario: TEdit
       Left = 20
-      Top = 260
+      Top = 300
       Width = 460
       Height = 23
       TabOrder = 5
@@ -291,7 +286,7 @@ object frmMain: TfrmMain
     end
     object edtSenha: TEdit
       Left = 20
-      Top = 310
+      Top = 350
       Width = 460
       Height = 23
       PasswordChar = '*'
@@ -299,7 +294,7 @@ object frmMain: TfrmMain
     end
     object cbxCharset: TComboBox
       Left = 20
-      Top = 360
+      Top = 400
       Width = 460
       Height = 23
       Style = csDropDownList
@@ -312,14 +307,14 @@ object frmMain: TfrmMain
     end
     object edtFbClient: TEdit
       Left = 20
-      Top = 410
+      Top = 450
       Width = 390
       Height = 23
       TabOrder = 8
     end
     object btnBrowseFbClient: TButton
       Left = 420
-      Top = 409
+      Top = 449
       Width = 60
       Height = 25
       Caption = '...'
@@ -328,7 +323,7 @@ object frmMain: TfrmMain
     end
     object cbxVersaoScripts: TComboBox
       Left = 20
-      Top = 491
+      Top = 531
       Width = 460
       Height = 23
       Style = csDropDownList
@@ -338,14 +333,14 @@ object frmMain: TfrmMain
     end
     object edtPastaScripts: TEdit
       Left = 20
-      Top = 541
+      Top = 581
       Width = 390
       Height = 23
       TabOrder = 11
     end
     object btnBrowsePastaScripts: TButton
       Left = 420
-      Top = 540
+      Top = 580
       Width = 60
       Height = 25
       Caption = '...'
@@ -354,7 +349,7 @@ object frmMain: TfrmMain
     end
     object chkPararErro: TCheckBox
       Left = 20
-      Top = 576
+      Top = 616
       Width = 460
       Height = 17
       Caption = 'Parar ao encontrar erro'
@@ -364,7 +359,7 @@ object frmMain: TfrmMain
     end
     object btnTestarConexao: TButton
       Left = 20
-      Top = 612
+      Top = 652
       Width = 460
       Height = 32
       Caption = 'Testar Conex'#227'o'
@@ -373,7 +368,7 @@ object frmMain: TfrmMain
     end
     object btnSalvarConfig: TButton
       Left = 20
-      Top = 652
+      Top = 692
       Width = 460
       Height = 32
       Caption = 'Salvar Configura'#231#227'o'

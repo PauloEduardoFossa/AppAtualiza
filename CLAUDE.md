@@ -17,7 +17,7 @@ working copy SVN; nao faz parte do monorepo TopSystem em `C:\TopSystem\Delphi`
 .\build.bat
 ```
 
-Saida: `bin\AppAtualiza.exe` (junto de `config.json`, `logs\` e `Styles\`); `.dcu` em `dcu\`. Fontes de recurso (`.rc`, `.manifest`, `.RES`, `.ico`) em `Assets\`.
+Saida: `bin\AppAtualiza.exe` (junto de `config.json` e `logs\`); `.dcu` em `dcu\`. Fontes de recurso (`.rc`, `.manifest`, `.RES`, `.ico`) em `Assets\`.
 
 Sem `.dproj` — compila direto com `dcc32` porque o `dcc32.cfg` da instalacao ja
 inclui `C:\...\Studio\20.0\lib\win32\release` no `-u`, onde estao os `.dcu` de
@@ -34,7 +34,7 @@ propriedades do `.exe` (aba Detalhes). Fonte unica: `Model\Model.Version.pas`.
 
 - **X (substituicao)** — `VERSAO_SUBSTITUICAO`, a mao. Sobe quando a mudanca exige
   apagar tudo e copiar de novo (formato de `config.json`/historico de estorno,
-  pastas, `Styles\`...).
+  pastas...).
 - **Y (disponibilizacao)** — `VERSAO_DISPONIBILIZACAO`, a mao. Sobe a cada
   versao entregue para uso.
 - **Z (release)** — contador de builds, **automatico**: o `build.bat` roda
@@ -83,6 +83,13 @@ propriedades do `.exe` (aba Detalhes). Fonte unica: `Model\Model.Version.pas`.
   para a subpasta). `AtivarTopServer` copia so `bancoDados.host/porta/path/usuario/senha`
   do arquivo escolhido para o atual, preservando o resto do JSON; faz backup em
   `bases\_backup` (ultimos 10) e grava via temp + `MoveFileEx` (atomico).
+  A senha do arquivo e decifrada em `Model\Model.TopServersCrypto.pas` (mesmo esquema do
+  TopSystem, `UTopSystem.Criptografia.Senha.CompativelCSharp.pas`: AES-128 CBC via
+  CryptoAPI, chave = SHA-256 de um segredo fixo, texto UTF-16LE, Base64) e preenche
+  `edtSenha` ao escolher a base. **O segredo NAO fica no codigo/repositorio**: vem do
+  campo `topServersKey` do `config.json` (ignorado pelo git; o valor esta em
+  `cChaveSenha` de `UTopSystem.Criptografia.Senha.CompativelCSharp.pas`). Sem ele a
+  senha nao e preenchida e o log avisa. Numa maquina nova, adicionar o campo a mao.
   O combo mostra "(ativa: X)" comparando `host:porta|path`.
 - `Controller\Controller.Main.pas` — media View/Model; roda a execucao dos
   scripts numa thread de fundo (`TThread.CreateAnonymousThread`) e repassa
@@ -116,10 +123,19 @@ Fica ao lado do exe (`Model.Config.DefaultConfigFileName`). Formato:
   autocommit implicito do FireDAC (nunca chamar `StartTransaction` aqui).
   Comandos `COMMIT;`/`COMMIT WORK;` do proprio script sao ignorados
   (`DeveIgnorarComando`) porque nao sao SQL valido pra mandar ao servidor.
-- **`Style 'X' not found`**: o nome interno de um `.vsf` nao e o nome do
-  arquivo. `AppAtualiza.dpr` carrega `Styles\Windows10Blue.vsf` e descobre o
-  nome comparando `TStyleManager.StyleNames` antes/depois do `LoadFromFile`
-  (nao tem `.TrySetStyle` com string fixa).
+- **Icones nos botoes nao aparecem (`Images`/`ImageIndex` ignorados)**: o manifesto
+  (`Assets\AppAtualiza.manifest`) precisa declarar a dependencia
+  `Microsoft.Windows.Common-Controls` 6.0.0.0; sem ela o Windows nao suporta imagem em
+  `TButton` (nem nativo, nem com VCL Style). Os icones da barra sao glifos da
+  `Segoe MDL2 Assets` gerados em runtime (`View\View.GlyphIcons.pas`,
+  `TfrmMain.ConfigurarIconesToolbar`).
+- **Tema fixo "Amethyst Kamri", embutido no exe** (sem pasta `Styles\`, sem combo de
+  tema): `Assets\AmethystKamri.vsf` entra em `Assets\AppAtualiza.rc` como recurso do tipo
+  **`VCLSTYLE`** (outro tipo, ex. `RCDATA`, **nao** registra o estilo: `LoadFromResource`
+  nao da erro mas `StyleNames` nao muda). A VCL registra sozinha os `VCLSTYLE` na
+  inicializacao; `AppAtualiza.dpr` so procura em `StyleNames` o nome que contem
+  "Amethyst" (o nome interno nao e o nome do arquivo) e chama `TrySetStyle`.
+  `build.bat` roda `cgrc AppAtualiza.rc` para regerar o `.RES`.
 - **`Object factory for class {...} is missing ... TFDGUIxWaitCursor`**: app
   FireDAC sem nenhuma unit visual do FireDAC no `uses` nao registra o
   wait-cursor factory usado internamente em operacoes longas. Fix: `uses
