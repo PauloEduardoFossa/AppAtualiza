@@ -216,11 +216,38 @@ object frmMain: TfrmMain
     object cbxClienteBase: TComboBox
       Left = 20
       Top = 60
-      Width = 460
+      Width = 270
       Height = 23
-      Style = csDropDownList
+      AutoDropDown = True
       TabOrder = 0
       OnChange = cbxClienteBaseChange
+    end
+    object btnRecarregarBases: TButton
+      Left = 296
+      Top = 59
+      Width = 70
+      Height = 25
+      Caption = 'Recarregar'
+      TabOrder = 20
+      OnClick = btnRecarregarBasesClick
+    end
+    object btnAtivarBase: TButton
+      Left = 372
+      Top = 59
+      Width = 108
+      Height = 25
+      Caption = 'Ativar esta base'
+      TabOrder = 21
+      OnClick = btnAtivarBaseClick
+    end
+    object btnMigrarBases: TButton
+      Left = 380
+      Top = 37
+      Width = 100
+      Height = 21
+      Caption = 'Migrar soltos'
+      TabOrder = 22
+      OnClick = btnMigrarBasesClick
     end
     object edtServidor: TEdit
       Left = 20

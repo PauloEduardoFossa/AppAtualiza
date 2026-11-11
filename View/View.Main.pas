@@ -23,6 +23,9 @@ type
     lblSecaoBanco: TLabel;
     lblClienteBase: TLabel;
     cbxClienteBase: TComboBox;
+    btnRecarregarBases: TButton;
+    btnAtivarBase: TButton;
+    btnMigrarBases: TButton;
     lblServidor: TLabel;
     edtServidor: TEdit;
     lblPorta: TLabel;
@@ -115,6 +118,9 @@ type
     procedure miExecutarScriptClick(Sender: TObject);
     procedure miLimparLogClick(Sender: TObject);
     procedure cbxClienteBaseChange(Sender: TObject);
+    procedure btnRecarregarBasesClick(Sender: TObject);
+    procedure btnAtivarBaseClick(Sender: TObject);
+    procedure btnMigrarBasesClick(Sender: TObject);
     procedure PreencherVersoes(const ASelecionada: string);
     procedure cbxVersaoScriptsChange(Sender: TObject);
     procedure cbxVersaoScriptsDropDown(Sender: TObject);
@@ -286,13 +292,95 @@ end;
 procedure TfrmMain.CarregarClientesBase;
 var
   Entry: TTopServerEntry;
+  Avisos: TStringList;
+  Aviso, Ativa, Selecionado: string;
+  Soltos: Integer;
 begin
-  FTopServers := ListarTopServers;
+  Selecionado := cbxClienteBase.Text;
+  if Selecionado = '' then
+    Selecionado := FController.Config.ClientName;
+
+  Avisos := TStringList.Create;
+  try
+    FTopServers := ListarTopServers(PASTA_SERVER_PADRAO, Avisos);
+    for Aviso in Avisos do
+      AppendLog('Bases: ' + Aviso);
+  finally
+    Avisos.Free;
+  end;
+
   cbxClienteBase.Items.Clear;
   for Entry in FTopServers do
     cbxClienteBase.Items.Add(Entry.NomeExibicao);
   cbxClienteBase.Enabled := cbxClienteBase.Items.Count > 0;
-  cbxClienteBase.ItemIndex := cbxClienteBase.Items.IndexOf(FController.Config.ClientName);
+  cbxClienteBase.ItemIndex := cbxClienteBase.Items.IndexOf(Selecionado);
+
+  Ativa := NomeBaseAtiva(FTopServers);
+  if Ativa <> '' then
+    lblClienteBase.Caption := 'Cliente/Base (ativa: ' + Ativa + ')'
+  else
+    lblClienteBase.Caption := 'Cliente/Base';
+
+  Soltos := 0;
+  if TDirectory.Exists(PASTA_SERVER_PADRAO) then
+    Soltos := Length(TDirectory.GetFiles(PASTA_SERVER_PADRAO, 'topservers - *.config'));
+  btnMigrarBases.Visible := Soltos > 0;
+  btnMigrarBases.Caption := Format('Migrar soltos (%d)', [Soltos]);
+  btnAtivarBase.Enabled := cbxClienteBase.Items.Count > 0;
+end;
+
+procedure TfrmMain.btnRecarregarBasesClick(Sender: TObject);
+begin
+  CarregarClientesBase;
+  AppendLog(Format('Bases recarregadas (%d).', [Length(FTopServers)]));
+end;
+
+procedure TfrmMain.btnMigrarBasesClick(Sender: TObject);
+var
+  Qtde: Integer;
+begin
+  if MessageDlg('Mover os arquivos "topservers - *.config" soltos em ' + PASTA_SERVER_PADRAO +
+    ' para ' + PastaBases + '?'#13#10'O topservers.config n'#227'o '#233' alterado.',
+    mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
+    Exit;
+  try
+    Qtde := MigrarArquivosSoltos;
+    AppendLog(Format('%d arquivo(s) movido(s) para %s.', [Qtde, PastaBases]));
+  except
+    on E: Exception do
+      MessageDlg('Falha ao migrar: ' + E.Message, mtError, [mbOK], 0);
+  end;
+  CarregarClientesBase;
+end;
+
+procedure TfrmMain.btnAtivarBaseClick(Sender: TObject);
+var
+  Entry: TTopServerEntry;
+  Backup: string;
+begin
+  if (cbxClienteBase.ItemIndex < 0) or (cbxClienteBase.ItemIndex >= Length(FTopServers)) then
+  begin
+    MessageDlg('Selecione uma base na lista.', mtInformation, [mbOK], 0);
+    Exit;
+  end;
+  Entry := FTopServers[cbxClienteBase.ItemIndex];
+  if Entry.EhAtual then
+  begin
+    MessageDlg('Esta '#233' a base que j'#225' est'#225' ativa (topservers.config).', mtInformation, [mbOK], 0);
+    Exit;
+  end;
+  try
+    Backup := AtivarTopServer(Entry);
+    AppendLog(Format('topservers.config agora aponta para "%s". Backup: %s',
+      [Entry.NomeExibicao, Backup]));
+  except
+    on E: Exception do
+    begin
+      MessageDlg('Falha ao ativar a base: ' + E.Message, mtError, [mbOK], 0);
+      Exit;
+    end;
+  end;
+  CarregarClientesBase;
 end;
 
 procedure TfrmMain.cbxClienteBaseChange(Sender: TObject);

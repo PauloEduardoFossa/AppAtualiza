@@ -76,6 +76,14 @@ propriedades do `.exe` (aba Detalhes). Fonte unica: `Model\Model.Version.pas`.
   view/funcao pre-existente sobrescrita. Se um undo falhar (ex.:
   script posterior depende do objeto), o estorno para e o comando que falhou
   continua no json para nova tentativa.
+- `Model\Model.TopServersImport.pas` — bases do TopSystem em `C:\TopSystem\Server`.
+  `topservers.config` = base **atual** (lido pelos servicos; o app so o altera em
+  "Ativar esta base"). Bases nomeadas ficam em `bases\*.config`
+  (tambem le os `topservers - NOME.config` soltos na raiz; botao "Migrar soltos" move
+  para a subpasta). `AtivarTopServer` copia so `bancoDados.host/porta/path/usuario/senha`
+  do arquivo escolhido para o atual, preservando o resto do JSON; faz backup em
+  `bases\_backup` (ultimos 10) e grava via temp + `MoveFileEx` (atomico).
+  O combo mostra "(ativa: X)" comparando `host:porta|path`.
 - `Controller\Controller.Main.pas` — media View/Model; roda a execucao dos
   scripts numa thread de fundo (`TThread.CreateAnonymousThread`) e repassa
   log/status pra UI via `TThread.Queue`.
