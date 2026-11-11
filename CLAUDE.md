@@ -128,7 +128,7 @@ Fica ao lado do exe (`Model.Config.DefaultConfigFileName`). Formato:
   `Microsoft.Windows.Common-Controls` 6.0.0.0; sem ela o Windows nao suporta imagem em
   `TButton` (nem nativo, nem com VCL Style). Os icones da barra sao glifos da
   `Segoe MDL2 Assets` gerados em runtime (`View\View.GlyphIcons.pas`,
-  `TfrmMain.ConfigurarIconesToolbar`).
+  `TfrmMain.ConfigurarIcones` (lista de botao/glifo/cor; botoes pequenos ficam so com icone e dica)).
 - **Tema fixo "Amethyst Kamri", embutido no exe** (sem pasta `Styles\`, sem combo de
   tema): `Assets\AmethystKamri.vsf` entra em `Assets\AppAtualiza.rc` como recurso do tipo
   **`VCLSTYLE`** (outro tipo, ex. `RCDATA`, **nao** registra o estilo: `LoadFromResource`

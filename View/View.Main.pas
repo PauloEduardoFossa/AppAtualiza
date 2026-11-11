@@ -132,7 +132,7 @@ type
     procedure RecarregarGrid;
     procedure CarregarClientesBase;
     procedure CarregarVersoesScripts;
-    procedure ConfigurarIconesToolbar;
+    procedure ConfigurarIcones;
     function ItemDoScript(AScript: TMigrationScript): TListItem;
     function ScriptsAlvo: TArray<TMigrationScript>;
     procedure AppendLog(const AMsg: string);
@@ -203,34 +203,73 @@ begin
   ConfigParaTela;
   CarregarClientesBase;
   CarregarVersoesScripts;
-  ConfigurarIconesToolbar;
+  ConfigurarIcones;
 end;
 
-// Icones da barra de botoes (glifos da Segoe MDL2 Assets, gerados em tempo de execucao).
+// Icones dos botoes (glifos da Segoe MDL2 Assets, gerados em tempo de execucao).
 // Sem a fonte (Windows antigo) os botoes ficam so com texto.
-procedure TfrmMain.ConfigurarIconesToolbar;
+procedure TfrmMain.ConfigurarIcones;
 type
   TIcone = record
     Botao: TButton;
     Glifo: Word;
     Cor: TColor;
     SoIcone: Boolean;
+    Dica: string;
   end;
 var
   Neutra, Desab: TColor;
-  Lista: TImageList;
-  Itens: array of TIcone;
-  Glifos: array of Word;
-  Cores: array of TColor;
-  I, N: Integer;
 
-  procedure Add(ABotao: TButton; AGlifo: Word; ACor: TColor; ASoIcone: Boolean = False);
+  function Ic(ABotao: TButton; AGlifo: Word; ACor: TColor; ASoIcone: Boolean = False;
+    const ADica: string = ''): TIcone;
   begin
-    SetLength(Itens, Length(Itens) + 1);
-    Itens[High(Itens)].Botao := ABotao;
-    Itens[High(Itens)].Glifo := AGlifo;
-    Itens[High(Itens)].Cor := ACor;
-    Itens[High(Itens)].SoIcone := ASoIcone;
+    Result.Botao := ABotao;
+    Result.Glifo := AGlifo;
+    Result.Cor := ACor;
+    Result.SoIcone := ASoIcone;
+    Result.Dica := ADica;
+  end;
+
+  // Cria uma lista de imagens para o grupo e a aplica nos botoes do grupo.
+  procedure Aplicar(const AItens: array of TIcone; ATamanho, AMargemEsq: Integer);
+  var
+    Lista: TImageList;
+    Glifos: array of Word;
+    Cores: array of TColor;
+    I, N: Integer;
+  begin
+    N := Length(AItens);
+    SetLength(Glifos, N);
+    SetLength(Cores, N);
+    for I := 0 to N - 1 do
+    begin
+      Glifos[I] := AItens[I].Glifo;
+      Cores[I] := AItens[I].Cor;
+    end;
+    Lista := CriarImageListGlifos(Self, Glifos, Cores, ATamanho, Desab);
+    for I := 0 to N - 1 do
+      with AItens[I].Botao do
+      begin
+        Images := Lista;
+        ImageIndex := I;
+        DisabledImageIndex := N + I;
+        if AItens[I].SoIcone then
+        begin
+          Caption := '';
+          ImageAlignment := TImageAlignment.iaCenter;
+          if AItens[I].Dica <> '' then
+          begin
+            Hint := AItens[I].Dica;
+            ShowHint := True;
+          end;
+        end
+        else
+        begin
+          ImageAlignment := TImageAlignment.iaLeft;
+          ImageMargins.Left := AMargemEsq;
+          ImageMargins.Right := 4;
+        end;
+      end;
   end;
 
 begin
@@ -239,42 +278,29 @@ begin
   Neutra := TStyleManager.ActiveStyle.GetStyleFontColor(sfButtonTextNormal);
   Desab := TStyleManager.ActiveStyle.GetStyleFontColor(sfButtonTextDisabled);
 
-  Add(btnAtualizarLista, $E72C, RGB(100, 181, 246));      // Sync
-  Add(btnVersaoAnterior, $E76B, Neutra, True);            // ChevronLeft
-  Add(btnProximaVersao, $E76C, Neutra, True);             // ChevronRight
-  Add(btnExecutar, $E102, RGB(76, 175, 80));              // Play (preenchido)
-  Add(btnParar, $E71A, RGB(239, 83, 80));                 // Stop
+  // Botoes grandes (32 px de altura), com texto
+  Aplicar([
+    Ic(btnAtualizarLista, $E72C, RGB(100, 181, 246)),            // Sync
+    Ic(btnVersaoAnterior, $E76B, Neutra, True),                  // ChevronLeft
+    Ic(btnProximaVersao, $E76C, Neutra, True),                   // ChevronRight
+    Ic(btnExecutar, $E102, RGB(76, 175, 80)),                    // Play
+    Ic(btnParar, $E71A, RGB(239, 83, 80)),                       // Stop
+    Ic(btnAtivarBase, $E73E, RGB(76, 175, 80)),                  // CheckMark
+    Ic(btnTestarConexao, $E839, RGB(100, 181, 246)),             // Rede
+    Ic(btnSalvarConfig, $E74E, Neutra),                          // Save
+    Ic(btnAbrirLogErros, $E7BA, RGB(255, 183, 77))               // Warning
+  ], 20, 12);
 
-  N := Length(Itens);
-  SetLength(Glifos, N);
-  SetLength(Cores, N);
-  for I := 0 to N - 1 do
-  begin
-    Glifos[I] := Itens[I].Glifo;
-    Cores[I] := Itens[I].Cor;
-  end;
-  Lista := CriarImageListGlifos(Self, Glifos, Cores, 20, Desab);
-
-  for I := 0 to N - 1 do
-    with Itens[I].Botao do
-    begin
-      Images := Lista;
-      ImageIndex := I;
-      DisabledImageIndex := N + I;
-      if Itens[I].SoIcone then
-      begin
-        Caption := '';
-        ImageAlignment := TImageAlignment.iaCenter;
-      end
-      else
-      begin
-        ImageAlignment := TImageAlignment.iaLeft;
-        ImageMargins.Left := 12;
-        ImageMargins.Right := 4;
-      end;
-    end;
+  // Botoes pequenos (so icone)
+  Aplicar([
+    Ic(btnRecarregarBases, $E72C, RGB(100, 181, 246), True, 'Recarregar lista de bases'),
+    Ic(btnBrowseBanco, $E8A5, Neutra, True, 'Selecionar o arquivo do banco'),
+    Ic(btnBrowseFbClient, $E8A5, Neutra, True, 'Selecionar o fbclient.dll'),
+    Ic(btnBrowsePastaScripts, $E838, Neutra, True, 'Selecionar a pasta dos scripts'),
+    Ic(btnMaximizar, $E922, Neutra, True, 'Maximizar / restaurar'),
+    Ic(btnFechar, $E8BB, Neutra, True, 'Fechar')
+  ], 16, 0);
 end;
-
 procedure TfrmMain.FormDestroy(Sender: TObject);
 begin
   FController.Free;
